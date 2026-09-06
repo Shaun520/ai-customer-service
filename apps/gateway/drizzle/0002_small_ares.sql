@@ -1,0 +1,1 @@
+ALTER TABLE "api_keys" ALTER COLUMN "prefix" SET DATA TYPE varchar(16);

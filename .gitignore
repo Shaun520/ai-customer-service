@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+volumes/
+*.log
+.DS_Store
+
+# IDE 辅助/工作会话目录
+.workbuddy/
+.zcode/
+
+# 个人文档
+*.docx

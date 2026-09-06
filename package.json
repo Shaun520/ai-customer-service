@@ -1,0 +1,23 @@
+{
+  "name": "ai-customer-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "多行业 AI 智能客服系统：AI 网关 + RAG + Milvus + 合规护栏",
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "apps/gateway"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @aics/gateway",
+    "start": "npm run start -w @aics/gateway",
+    "build": "npm run build -w @aics/gateway",
+    "test": "npm run test -w @aics/gateway",
+    "db:generate": "npm run db:generate -w @aics/gateway",
+    "db:migrate": "npm run db:migrate -w @aics/gateway",
+    "smoke": "npm run smoke -w @aics/gateway"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
