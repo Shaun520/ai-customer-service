@@ -443,11 +443,15 @@ export const MilvusClient = {
     };
     if (p.filter) body.filter = p.filter;
     if (p.partition) body.partitionNames = [p.partition];
-    const data = await rawRequest<Array<Array<T & { distance: number }>>>(
+    const data = await rawRequest<Array<Array<T & { distance: number }>> | Array<T & { distance: number }>>(
       '/v2/vectordb/entities/search',
       body,
     );
-    const hits = Array.isArray(data) && Array.isArray(data[0]) ? data[0] : [];
+    // Milvus v2 REST 对单 vector 查询返回一维数组 [result]；多 vector 返回二维 [[result]]
+    const hits: Array<T & { distance: number }> =
+      Array.isArray(data) && data.length > 0 && Array.isArray(data[0])
+        ? (data as Array<Array<T & { distance: number }>>)[0]
+        : (data as Array<T & { distance: number }>);
     return hits.map((h) => ({ ...h, distance: Number(h.distance) }));
   },
 
@@ -483,11 +487,47 @@ export const MilvusClient = {
     if (p.filter) body.filter = p.filter;
     if (p.partition) body.partitionNames = [p.partition];
     try {
-      const data = await rawRequest<Array<Array<T & { distance: number }>>>(
+      const data = await rawRequest<Array<Array<T & { distance: number }>> | Array<T & { distance: number }>>(
         '/v2/vectordb/entities/hybrid_search',
         body,
       );
-      const hits = Array.isArray(data) && Array.isArray(data[0]) ? data[0] : [];
+      const hits: Array<T & { distance: number }> =
+        Array.isArray(data) && data.length > 0 && Array.isArray(data[0])
+          ? (data as Array<Array<T & { distance: number }>>)[0]
+          : (data as Array<T & { distance: number }>);
+      // Milvus v2 hybrid_search(RRF) 结果通常只含 distance + id，不含原始字段。
+      // 命中项缺关键输出字段时，先按 dense 向量检索补齐字段（dense search 返回结构断言含字段）。
+      const needsFields = hits.some((h) => h.text === undefined || h.doc_name === undefined);
+      if (needsFields && hits.length > 0) {
+        console.warn(
+          '[milvus] hybrid_search lacks output fields, backfilling via dense search (RRF only via dense)',
+        );
+        try {
+          const denseParams: SearchParams = {
+            collection: p.collection,
+            vector: p.vector,
+            annsField: p.annsField,
+            topK: p.topK,
+            outputFields: p.outputFields,
+            partition: p.partition,
+            metric: p.metric,
+            threshold: 0,
+          };
+          if (p.filter) denseParams.filter = p.filter;
+          const dense = await MilvusClient.search<Record<string, unknown>>(denseParams);
+          const byId = new Map(dense.map((r) => [String(r.id), r]));
+          const merged: Array<T & { distance: number }> = [];
+          for (const h of hits) {
+            const row = byId.get(String(h.id));
+            const m = { ...h };
+            if (row) Object.assign(m, row);
+            merged.push(m);
+          }
+          return merged.map((h) => ({ ...h, distance: Number(h.distance) }));
+        } catch (e) {
+          console.warn('[milvus] hybrid_search dense backfill failed:', (e as Error).message);
+        }
+      }
       return hits.map((h) => ({ ...h, distance: Number(h.distance) }));
     } catch (err) {
       // 降级：sparse 字段不存在 / 版本不支持 hybrid_search

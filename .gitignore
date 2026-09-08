@@ -8,6 +8,7 @@ volumes/
 # IDE 辅助/工作会话目录
 .workbuddy/
 .zcode/
+.trae/
 
 # 个人文档
 *.docx

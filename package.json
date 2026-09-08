@@ -15,7 +15,10 @@
     "test": "npm run test -w @aics/gateway",
     "db:generate": "npm run db:generate -w @aics/gateway",
     "db:migrate": "npm run db:migrate -w @aics/gateway",
-    "smoke": "npm run smoke -w @aics/gateway"
+    "smoke": "npm run smoke -w @aics/gateway",
+    "check:models": "npm run check:models -w @aics/gateway",
+    "eval:retrieval": "npm run eval:retrieval -w @aics/gateway",
+    "rebuild:collections": "npm run rebuild:collections -w @aics/gateway"
   },
   "engines": {
     "node": ">=20"

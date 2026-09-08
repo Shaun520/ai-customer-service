@@ -26,8 +26,8 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "19000:9000"   # 宿主 9000 偶发被 Windows 动态保留端口占用导致 bind 失败，改用 19000
+      - "19001:9001"
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
     command: minio server /minio_data
@@ -45,11 +45,14 @@ services:
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
+      # 开启用户鉴权；root 默认密码 123456（仅首次初始化生效）
+      COMMON_SECURITY_AUTHORIZATIONENABLED: "true"
+      COMMON_SECURITY_DEFAULTROOTPASSWORD: "123456"
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
     ports:
-      - "19530:19530"   # gRPC（SDK 用）+ RESTful v2 API (/v2/vectordb)
-      - "9091:9091"     # 仅健康检查 /healthz（Milvus 2.5 起 REST 已迁至 19530）
+      - "19530:19530"   # gRPC（SDK 用）+ RESTful v2 API (/v2/vectordb)，网关必需
+      # 9091 仅容器内 /healthz 探活，无需映射到宿主（避免 Windows bind 冲突）
     depends_on:
       - etcd
       - minio

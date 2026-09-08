@@ -10,7 +10,10 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "check:models": "tsx scripts/check-models.ts",
+    "eval:retrieval": "tsx scripts/eval-retrieval.ts",
+    "rebuild:collections": "tsx scripts/rebuild-collections.ts"
   },
   "dependencies": {
     "@aics/shared": "*",

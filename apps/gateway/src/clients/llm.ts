@@ -5,6 +5,7 @@
  * - 内置 mock 提供者：无外部 Key 时可离线跑通全链路
  */
 import { config, isMockUpstream, type LlmUpstream } from '../config.js';
+import { createHmac } from 'node:crypto';
 
 export interface ChatResult {
   content: string;
@@ -20,6 +21,31 @@ export class LlmError extends Error {
     super(message);
     this.name = 'LlmError';
   }
+}
+
+/**
+ * 智谱旧版 "id.secret" 格式密钥 → JWT 签名（HS256, sign_type=SIGN）。
+ * 新版密钥（无点号或平台已声明直接可用）原样透传 Bearer。
+ */
+const jwtCache = new Map<string, { token: string; exp: number }>();
+
+export function upstreamAuthHeader(upstream: LlmUpstream): string {
+  const key = upstream.apiKey.trim();
+  // 智谱格式：32位hex + '.' + 16位字母数字
+  if (!/^[0-9a-f]{32}\.[A-Za-z0-9]{16}$/.test(key)) {
+    return `Bearer ${key}`;
+  }
+  const cached = jwtCache.get(key);
+  if (cached && Date.now() < cached.exp) return `Bearer ${cached.token}`;
+  const [id, secret] = key.split('.');
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const now = Date.now();
+  const header = b64({ alg: 'HS256', sign_type: 'SIGN' });
+  const payload = b64({ api_key: id, exp: now + 3600_000, timestamp: now });
+  const sig = createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url');
+  const token = `${header}.${payload}.${sig}`;
+  jwtCache.set(key, { token, exp: now + 55 * 60_000 });
+  return `Bearer ${token}`;
 }
 
 /** 按任务名选上游：LLM_MODEL_ROUTING[task]，缺省第一个 */
@@ -85,7 +111,7 @@ async function chatOnce(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${upstream.apiKey}`,
+        Authorization: upstreamAuthHeader(upstream),
       },
       body: JSON.stringify({
         model: upstream.model,
@@ -197,7 +223,7 @@ export async function chatStream(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${upstream.apiKey}`,
+      Authorization: upstreamAuthHeader(upstream),
     },
     body: JSON.stringify({
       model: upstream.model,
@@ -217,16 +243,32 @@ export async function chatStream(
 export async function embed(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
   const { baseUrl, apiKey, model, dim } = config.embedding;
-  if (!baseUrl || !apiKey || !model) {
-    // mock embedding：确定性哈希向量
-    return texts.map((t) => mockEmbedding(t, dim));
+  if (baseUrl && apiKey && model) {
+    try {
+      return await embedRemote(texts, { baseUrl, apiKey, model, dim });
+    } catch (err) {
+      // 降级保护：真实 embedding 失败（Key 失效/网络）时回落 mock 向量，
+      // 保证 RAG 链路可用；生产环境应尽快修复（npm run check:models 定位）
+      console.error(`[embedding] remote embedding failed, falling back to mock vectors: ${(err as Error).message}`);
+    }
   }
+  return texts.map((t) => mockEmbedding(t, dim));
+}
+
+async function embedRemote(
+  texts: string[],
+  cfg: { baseUrl: string; apiKey: string; model: string; dim: number },
+): Promise<number[][]> {
+  const { baseUrl, apiKey, model, dim } = cfg;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30_000);
   try {
     const res = await fetch(`${baseUrl.replace(/\/$/, '')}/embeddings`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: upstreamAuthHeader({ name: 'embedding', baseUrl, apiKey, model }),
+      },
       body: JSON.stringify({ model, input: texts }),
       signal: controller.signal,
     });
