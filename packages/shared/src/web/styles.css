@@ -217,6 +217,45 @@ tbody tr:hover { background: var(--panel-2); }
 .card + .card { margin-top: 16px; }
 .card .h2 { margin-bottom: 10px; }
 
+/* 用量统计 */
+.metric-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+.metric-card {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; box-shadow: var(--shadow); min-width: 0;
+}
+.metric-card.ok { border-color: rgba(5, 150, 105, 0.35); }
+.metric-icon {
+  width: 38px; height: 38px; border-radius: 10px; background: var(--brand-soft); color: var(--brand);
+  display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+}
+.metric-icon.ok { background: var(--ok-soft); color: var(--ok); }
+.metric-body { min-width: 0; }
+.metric-label { font-size: 12px; color: var(--muted-2); font-weight: 500; }
+.metric-value { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin: 2px 0 0; }
+.metric-card.ok .metric-value { color: var(--ok); }
+.metric-foot { font-size: 11px; color: var(--muted-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.chart-legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.chart-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.dot.uncached { background: var(--brand); }
+.dot.cached { background: var(--ok); }
+.usage-chart { width: 100%; height: auto; display: block; margin-top: 8px; }
+.usage-gridline { stroke: var(--border); stroke-width: 1; }
+.usage-ylabel { fill: var(--muted-2); font-size: 10px; text-anchor: end; }
+.usage-xlabel { fill: var(--muted-2); font-size: 10px; }
+.usage-uncached { fill: var(--brand); opacity: 0.9; }
+.usage-cached { fill: var(--ok); }
+
+/* 知识库检索预览 */
+.kb-hits { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.kb-hit { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; background: var(--panel-2); }
+.kb-hit-meta { display: flex; gap: 8px; margin-bottom: 6px; }
+.kb-hit-text {
+  margin: 0; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+  background: transparent; border: none; padding: 0; color: var(--text);
+}
+
 .review-item {
   border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 10px;
   background: var(--panel);
@@ -236,6 +275,7 @@ tbody tr:hover { background: var(--panel-2); }
   .admin-side .brand span, .admin-nav button .label, .admin-side .side-foot { display: none; }
   .admin-nav button { justify-content: center; }
   .admin-main { padding: 18px; }
+  .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .suggestions { grid-template-columns: 1fr; }
   .bubble { max-width: 88%; }
 }

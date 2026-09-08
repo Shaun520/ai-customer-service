@@ -41,12 +41,41 @@ export async function chatStream(
   let buffer = '';
   let content = '';
   const meta: ChatMeta = {};
+  // 嗅探首字节：SSE 流以 "data:" 开头，缓存命中时网关会直接返回单次 JSON（以 "{" 开头）
+  let sniffed = false;
+  let isJson = false;
 
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+      // 一次缓存命中场景下，响应体可能是一整段 JSON 而非 SSE
+      if (!sniffed) {
+        const head = buffer.trimStart();
+        sniffed = true;
+        if (head.startsWith('{')) {
+          isJson = true;
+          try {
+            const j = JSON.parse(head) as {
+              choices?: Array<{ message?: { content?: string } }>;
+              aics?: ChatMeta;
+            };
+            const aics = j.aics as ChatMeta | undefined;
+            if (aics) Object.assign(meta, aics);
+            const msg = j.choices?.[0]?.message?.content;
+            if (typeof msg === 'string' && msg) {
+              content = msg;
+              onDelta(msg);
+            }
+          } catch {
+            // 解析失败时退回 SSE 模式继续读
+            isJson = false;
+          }
+          break;
+        }
+      }
+      if (isJson) break;
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
       for (const line of lines) {

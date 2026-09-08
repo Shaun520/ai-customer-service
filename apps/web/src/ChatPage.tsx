@@ -48,8 +48,8 @@ export default function ChatPage() {
 
   const saveSettings = () => {
     const k = draftKey.trim();
-    if (!k.startsWith('aics_')) {
-      setErr('API Key 应以 aics_ 开头，可在管理后台的【租户】页签发');
+    if (!k) {
+      setErr('请填写统一网关 API Key（见网关配置 GATEWAY_API_KEY）');
       return;
     }
     setErr('');
@@ -62,7 +62,7 @@ export default function ChatPage() {
     const text = (overrideText ?? input).trim();
     const key = apiKey.trim();
     if ((!text && !overrideText) || busy) return;
-    if (!key.startsWith('aics_')) {
+    if (!key) {
       setErr('请先在右上角【设置】中填写 API Key');
       setSettingsOpen(true);
       return;
@@ -212,7 +212,7 @@ export default function ChatPage() {
               <div className="h2">设置</div>
               <button className="icon-btn" aria-label="关闭" onClick={() => setSettingsOpen(false)}><Icon name="x" size={16} /></button>
             </div>
-            <label>API Key（由管理员在管理后台签发）</label>
+            <label>API Key（统一网关 Key，见网关配置 GATEWAY_API_KEY）</label>
             <input
               value={draftKey}
               onChange={(e) => setDraftKey(e.target.value)}
