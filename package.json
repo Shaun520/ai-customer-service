@@ -6,13 +6,19 @@
   "type": "module",
   "workspaces": [
     "packages/shared",
-    "apps/gateway"
+    "apps/gateway",
+    "apps/web",
+    "apps/admin"
   ],
   "scripts": {
     "dev": "npm run dev -w @aics/gateway",
     "start": "npm run start -w @aics/gateway",
     "build": "npm run build -w @aics/gateway",
     "test": "npm run test -w @aics/gateway",
+    "dev:web": "npm run dev -w @aics/web",
+    "build:web": "npm run build -w @aics/web",
+    "dev:admin": "npm run dev -w @aics/admin",
+    "build:admin": "npm run build -w @aics/admin",
     "db:generate": "npm run db:generate -w @aics/gateway",
     "db:migrate": "npm run db:migrate -w @aics/gateway",
     "smoke": "npm run smoke -w @aics/gateway",

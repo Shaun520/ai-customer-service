@@ -12,3 +12,6 @@ volumes/
 
 # 个人文档
 *.docx
+
+# 本地测试残留
+aics_body_tmp.json
