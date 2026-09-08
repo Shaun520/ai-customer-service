@@ -1,5 +1,5 @@
 // Lucide 风格线性图标（24x24 stroke），避免使用 emoji 作为图标
-type IconName = 'message' | 'bot' | 'user' | 'settings' | 'building' | 'book' | 'clipboard' | 'search' | 'send' | 'x' | 'copy' | 'check' | 'arrow-left' | 'clip';
+type IconName = 'message' | 'bot' | 'user' | 'settings' | 'building' | 'book' | 'clipboard' | 'search' | 'send' | 'x' | 'copy' | 'check' | 'arrow-left' | 'clip' | 'chart' | 'trash' | 'activity' | 'log-in' | 'log-out' | 'zap' | 'gauge';
 
 const PATHS: Record<string, JSX.Element> = {
   message: <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />,
@@ -67,6 +67,42 @@ const PATHS: Record<string, JSX.Element> = {
   check: <path d="M20 6 9 17l-5-5" />,
   'arrow-left': <path d="m12 19-7-7 7-7M19 12H5" />,
   clip: <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />,
+  chart: (
+    <>
+      <path d="M3 3v18h18" />
+      <path d="M7 15v-4M12 15V7M17 15v-7" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+    </>
+  ),
+  activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+  'log-in': (
+    <>
+      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+      <path d="M10 17l5-5-5-5" />
+      <line x1="15" y1="12" x2="3" y2="12" />
+    </>
+  ),
+  'log-out': (
+    <>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <line x1="15" y1="12" x2="3" y2="12" />
+      <polyline points="10 17 15 12 10 7" />
+    </>
+  ),
+  zap: <path d="M13 2 3 14h9l-1 8 10-12h-9z" />,
+  gauge: (
+    <>
+      <path d="m12 14 4-4" />
+      <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+    </>
+  ),
 };
 
 export default function Icon({ name, size = 16 }: { name: IconName | string; size?: number }) {

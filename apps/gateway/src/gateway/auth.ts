@@ -1,12 +1,15 @@
 /**
- * 鉴权（API Key → 租户）+ 限流（RPM/TPM 令牌桶，按 API Key）
+ * 鉴权（统一网关 API Key → 单租户）+ 限流（RPM/TPM 令牌桶）
+ *
+ * 单租户模式：接入方（多端/多系统）共用同一把 GATEWAY_API_KEY，
+ * 不再按租户/客户分别签发 Key，也不再通过 api_keys 表做租户路由。
  */
 import type { Context, Next } from 'hono';
 import { createHash, randomBytes } from 'node:crypto';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { TenantContext } from '@aics/shared';
 import { db } from '../db/index.js';
-import { apiKeys, tenants } from '../db/schema.js';
+import { tenants } from '../db/schema.js';
 import { config } from '../config.js';
 import type { GatewayEnv } from '../types.js';
 
@@ -14,17 +17,40 @@ export function hashKey(raw: string): string {
   return createHash('sha256').update(raw).digest('hex');
 }
 
-/** 生成新 API Key：aics_<prefix8>_<random32>；仅创建时返回完整明文 */
-export function generateApiKey(): { raw: string; prefix: string; hash: string } {
-  const prefix = randomBytes(4).toString('hex');
-  const secret = randomBytes(24).toString('base64url');
-  const raw = `aics_${prefix}_${secret}`;
-  return { raw, prefix: `aics_${prefix}`, hash: hashKey(raw) };
+// 单租户：缓存已解析的默认租户，避免每次请求都查库
+let defaultTenant: TenantContext | null | undefined;
+
+/** 解析（并按需自动创建）系统唯一默认租户 */
+async function resolveDefaultTenant(): Promise<TenantContext> {
+  if (defaultTenant) return defaultTenant;
+  let rows = await db.select().from(tenants).where(eq(tenants.slug, config.tenantSlug)).limit(1);
+  if (!rows[0]) {
+    try {
+      const inserted = await db
+        .insert(tenants)
+        .values({ slug: config.tenantSlug, name: config.tenantName, industry: 'general' })
+        .returning();
+      rows = inserted;
+    } catch {
+      // 并发首次启动可能撞唯一键，回退重查
+      rows = await db.select().from(tenants).where(eq(tenants.slug, config.tenantSlug)).limit(1);
+    }
+  }
+  const t = rows[0];
+  defaultTenant = {
+    tenantId: t.id,
+    slug: t.slug,
+    name: t.name,
+    industry: (t.industry as TenantContext['industry']) ?? 'general',
+    systemPrompt: t.systemPrompt,
+    apiKeyId: t.id, // 单租户下限流与用量审计共用租户 id 作标识
+  };
+  return defaultTenant;
 }
 
 export interface AuthedContext extends Context<GatewayEnv> {}
 
-/** 鉴权中间件：Authorization: Bearer aics_xxx → 解析租户上下文 */
+/** 鉴权中间件：Authorization: Bearer <统一网关 Key> → 固定单租户上下文 */
 export async function authMiddleware(c: Context<GatewayEnv>, next: Next): Promise<Response | void> {
   const header = c.req.header('Authorization') ?? '';
   const raw = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
@@ -40,47 +66,29 @@ export async function authMiddleware(c: Context<GatewayEnv>, next: Next): Promis
       401,
     );
   }
-  const rows = await db
-    .select({
-      keyId: apiKeys.id,
-      rpm: apiKeys.rpm,
-      tpm: apiKeys.tpm,
-      enabled: apiKeys.enabled,
-      tenantId: tenants.id,
-      slug: tenants.slug,
-      name: tenants.name,
-      industry: tenants.industry,
-      systemPrompt: tenants.systemPrompt,
-    })
-    .from(apiKeys)
-    .innerJoin(tenants, eq(apiKeys.tenantId, tenants.id))
-    .where(eq(apiKeys.keyHash, hashKey(raw)))
-    .limit(1);
-
-  const row = rows[0];
-  if (!row || !row.enabled) {
+  if (hashKey(raw) !== hashKey(config.gatewayKey)) {
     return c.json(
       { error: { message: 'Invalid API key.', type: 'invalid_request_error', code: 'invalid_api_key' } },
       401,
     );
   }
 
-  const tenant: TenantContext = {
-    tenantId: row.tenantId,
-    slug: row.slug,
-    name: row.name,
-    industry: (row.industry as TenantContext['industry']) ?? 'general',
-    systemPrompt: row.systemPrompt,
-    apiKeyId: row.keyId,
-  };
+  const tenant = await resolveDefaultTenant();
   c.set('tenant', tenant);
-  c.set('rateLimits', { rpm: row.rpm, tpm: row.tpm });
+  c.set('rateLimits', { rpm: config.rateLimit.rpm, tpm: config.rateLimit.tpm });
   await next();
 }
 
 /** 管理接口鉴权：X-Admin-Token */
 export function adminAuth(c: Context): boolean {
   return (c.req.header('X-Admin-Token') ?? '') === config.adminToken;
+}
+
+/** 供管理端/链路反查复用：校验统一网关 Key，命中则返回默认租户 id */
+export async function resolveTenantIdByKey(raw: string): Promise<{ tenantId: number } | null> {
+  if (hashKey(raw) !== hashKey(config.gatewayKey)) return null;
+  const t = await resolveDefaultTenant();
+  return { tenantId: t.tenantId };
 }
 
 // ---------------- 限流（进程内滑动窗口） ----------------
@@ -133,14 +141,4 @@ export function checkRateLimit(apiKeyId: number, rpm: number, estimatedTokens = 
 export function recordTokenUsage(apiKeyId: number, tokens: number): void {
   const w = windows.get(apiKeyId);
   if (w) w.tokens.push({ at: Date.now(), n: tokens });
-}
-
-/** 按 keyHash 直查租户（供冒烟脚本复用） */
-export async function lookupTenantByKey(raw: string) {
-  const rows = await db
-    .select({ keyId: apiKeys.id, tenantId: apiKeys.tenantId })
-    .from(apiKeys)
-    .where(and(eq(apiKeys.keyHash, hashKey(raw)), eq(apiKeys.enabled, true)))
-    .limit(1);
-  return rows[0] ?? null;
 }

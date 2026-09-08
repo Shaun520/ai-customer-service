@@ -1,23 +1,68 @@
-// Admin 端 API 层：管理接口、知识库、审核、追踪。认证用 X-Admin-Token。
+// Admin 端 API 层：用量、知识库、审核、追踪。认证：
+//  - 管理接口用 X-Admin-Token
+//  - 知识库/对话/追踪用统一网关 Key（Authorization: Bearer）
 // /v1 相对路径由 Vite proxy 转发到网关 :8787。
 import { request, DEFAULT_ADMIN_TOKEN } from '@aics/shared/web';
 
 export { DEFAULT_ADMIN_TOKEN };
 
+/** 统一网关 API Key 的本地存储键（单租户模式，所有接入端共用一把） */
+export const GATEWAY_KEY_STORAGE = 'aics_gateway_key';
+export const DEFAULT_GATEWAY_KEY = 'aics-local-gateway-key';
+
+export interface UsageDaily {
+  day: string;
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  cachedRequests: number;
+  avgLatencyMs: number;
+}
+export interface UsageResponse {
+  days: number;
+  from: string;
+  tenant: string | null;
+  daily: UsageDaily[];
+  totals: {
+    requests: number;
+    promptTokens: number;
+    completionTokens: number;
+    cachedRequests: number;
+    avgLatencyMs: number;
+  };
+}
+
 export const admin = {
-  createTenant: (body: { slug: string; name: string; industry: string; systemPrompt?: string }) =>
-    request<{ id: number; slug: string; industry: string }>('/admin/tenants', { method: 'POST', body, auth: 'admin' }),
-  listTenants: () => request<{ tenants: Array<Record<string, unknown>> }>('/admin/tenants', { auth: 'admin' }),
-  createApiKey: (body: { tenantSlug: string; name: string; rpm?: number; tpm?: number }) =>
-    request<{ api_key: string; id: number; prefix: string; tenant: string }>('/admin/api-keys', { method: 'POST', body, auth: 'admin' }),
-  getRulePack: (industry: string) => request<Record<string, unknown>>(`/admin/rule-packs/${industry}`, { auth: 'admin' }),
-  updateRulePack: (industry: string, body: Record<string, unknown>) =>
-    request<Record<string, unknown>>(`/admin/rule-packs/${industry}`, { method: 'PUT', body, auth: 'admin' }),
+  usage: (days = 7) => request<UsageResponse>(`/admin/usage?days=${days}`, { auth: 'admin' }),
 };
+
+export interface KbDoc {
+  id: number;
+  name: string;
+  chunk_count: number;
+  created_at?: string;
+}
+export interface KbPreviewHit {
+  id: string;
+  text: string;
+  chunkIndex: number;
+  score: number;
+}
 
 export const knowledge = {
   ingest: (body: { name: string; text: string }, apiKey: string) =>
     request<{ document_id: number; chunks: number }>('/knowledge/documents', { method: 'POST', body, auth: 'bearer', token: apiKey }),
+  list: (apiKey: string) =>
+    request<{ documents: KbDoc[] }>('/knowledge/documents', { auth: 'bearer', token: apiKey }),
+  detail: (id: number, apiKey: string, query?: string) => {
+    const suffix = query ? `?q=${encodeURIComponent(query)}` : '';
+    return request<{ document: KbDoc; preview: KbPreviewHit[] | null; hint: string | null }>(
+      `/knowledge/documents/${id}${suffix}`,
+      { auth: 'bearer', token: apiKey },
+    );
+  },
+  remove: (id: number, apiKey: string) =>
+    request<{ deleted: number }>(`/knowledge/documents/${id}`, { method: 'DELETE', auth: 'bearer', token: apiKey }),
 };
 
 export const reviews = {

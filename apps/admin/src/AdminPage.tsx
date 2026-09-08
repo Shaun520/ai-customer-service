@@ -1,20 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '@aics/shared/web';
-import { admin, knowledge, reviews, trace as traceApi } from './api';
+import {
+  admin, knowledge, reviews, trace as traceApi,
+  GATEWAY_KEY_STORAGE, DEFAULT_GATEWAY_KEY,
+  type UsageResponse, type KbPreviewHit,
+} from './api';
 
-type Tab = 'tenants' | 'kb' | 'reviews' | 'trace';
+type Tab = 'usage' | 'kb' | 'reviews' | 'trace';
 
-const INDUSTRIES = [
-  { value: 'medical', label: '医疗 (medical)' },
-  { value: 'ecommerce', label: '电商 (ecommerce)' },
-  { value: 'tech', label: '科技 (tech)' },
-  { value: 'general', label: '通用 (general)' },
-];
 const DEFAULT_ADMIN_TOKEN = 'change-me-admin-token';
 
-interface TenantRow {
-  id: number; slug: string; name: string; industry: string; systemPrompt?: string | null;
-}
 interface KbDoc { id: number; name: string; chunk_count: number; created_at?: string }
 interface ReviewRow {
   id: number; originalQuery?: string; draftResponse?: string; riskLevel?: string;
@@ -22,7 +17,7 @@ interface ReviewRow {
 }
 
 const NAV: Array<{ key: Tab; icon: string; label: string }> = [
-  { key: 'tenants', icon: 'building', label: '租户管理' },
+  { key: 'usage', icon: 'chart', label: '用量统计' },
   { key: 'kb', icon: 'book', label: '知识库' },
   { key: 'reviews', icon: 'clipboard', label: '人工审核' },
   { key: 'trace', icon: 'search', label: '全链路追踪' },
@@ -31,7 +26,7 @@ const NAV: Array<{ key: Tab; icon: string; label: string }> = [
 export default function AdminPage({ goChat }: { goChat: () => void }) {
   const [adminToken, setAdminToken] = useState(() => localStorage.getItem('aics_admin_token') ?? DEFAULT_ADMIN_TOKEN);
   const [draftToken, setDraftToken] = useState(adminToken);
-  const [tab, setTab] = useState<Tab>('tenants');
+  const [tab, setTab] = useState<Tab>('usage');
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [reviewCount, setReviewCount] = useState<number | null>(null);
 
@@ -94,7 +89,7 @@ export default function AdminPage({ goChat }: { goChat: () => void }) {
 
           {notice && <div className={`notice-banner ${notice.kind === 'err' ? 'error' : ''}`}>{notice.text}</div>}
 
-          {tab === 'tenants' && <TenantsTab notify={notify} />}
+          {tab === 'usage' && <UsageTab />}
           {tab === 'kb' && <KbTab notify={notify} />}
           {tab === 'reviews' && <ReviewsTab notify={notify} />}
           {tab === 'trace' && <TraceTab notify={notify} />}
@@ -106,136 +101,184 @@ export default function AdminPage({ goChat }: { goChat: () => void }) {
 
 type Notify = (kind: 'ok' | 'err', text: string) => void;
 
-function TenantsTab({ notify }: { notify: Notify }) {
-  const [list, setList] = useState<TenantRow[]>([]);
-  const [slug, setSlug] = useState('');
-  const [name, setName] = useState('');
-  const [industry, setIndustry] = useState('medical');
-  const [sysPrompt, setSysPrompt] = useState('');
-  const [busy, setBusy] = useState(false);
+function UsageTab() {
+  const [days, setDays] = useState(7);
+  const [data, setData] = useState<UsageResponse | null>(null);
   const [err, setErr] = useState('');
-  const [keyFor, setKeyFor] = useState<Record<number, string>>({});
-  const [copied, setCopied] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    try { setList(((await admin.listTenants()).tenants as unknown as TenantRow[]) ?? []); }
-    catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    setErr(''); setBusy(true);
+    try {
+      setData(await admin.usage(days));
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setData(null); }
+    finally { setBusy(false); }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
-  const create = async () => {
-    if (!slug.trim() || !name.trim()) { setErr('请填写 slug 与名称'); return; }
-    setBusy(true); setErr('');
-    try {
-      await admin.createTenant({ slug: slug.trim(), name: name.trim(), industry, systemPrompt: sysPrompt.trim() || undefined });
-      notify('ok', '租户创建成功：' + slug.trim());
-      setSlug(''); setName(''); setSysPrompt('');
-      await load();
-    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
-  };
+  const nf = (n: number | undefined) => (n || 0).toLocaleString('en-US');
+  const t = data?.totals;
+  const daily = data?.daily ?? [];
+  const cacheRate = t && t.requests ? Math.round((t.cachedRequests / t.requests) * 100) : 0;
 
-  const issueKey = async (tenantSlug: string, tenantId: number) => {
-    setErr('');
-    try {
-      const r = await admin.createApiKey({ tenantSlug, name: '前台客服' });
-      setKeyFor((p) => ({ ...p, [tenantId]: r.api_key }));
-    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
-  };
+  const metrics: Array<{ icon: string; label: string; value: string; foot: string; accent?: 'ok' }> = [
+    { icon: 'activity', label: '请求总数', value: nf(t?.requests), foot: `${days} 天累计请求` },
+    { icon: 'log-in', label: '输入 Tokens', value: nf(t?.promptTokens), foot: 'Prompt tokens' },
+    { icon: 'log-out', label: '输出 Tokens', value: nf(t?.completionTokens), foot: 'Completion tokens' },
+    { icon: 'zap', label: '缓存命中率', value: `${cacheRate}%`, foot: `${nf(t?.cachedRequests)} / ${nf(t?.requests)} 次`, accent: 'ok' },
+    { icon: 'gauge', label: '平均延迟', value: `${Math.round(t?.avgLatencyMs ?? 0)} ms`, foot: '含模型推理耗时' },
+  ];
 
-  const copyKey = (tid: number, k: string) => {
-    navigator.clipboard?.writeText(k);
-    setCopied(tid);
-    setTimeout(() => setCopied(null), 1500);
+  // —— 每日请求量 → Stacked SVG 柱状图（绿 = 缓存命中，蓝 = 未命中）——
+  const W = 760, H = 240, padL = 44, padR = 12, padT = 18, padB = 32;
+  const chartW = W - padL - padR, chartH = H - padT - padB;
+  const rawMax = Math.max(1, ...daily.map((d) => d.requests));
+  const exp = Math.pow(10, Math.floor(Math.log10(rawMax)));
+  const yMax = Math.max(rawMax, Math.ceil(rawMax / exp) * exp);
+  const n = daily.length;
+  const slotW = n ? chartW / n : 0;
+  const barW = Math.min(46, slotW * 0.6);
+  const gridLines = [0, 1, 2, 3, 4].map((k) => ({ y: padT + chartH - (k * chartH) / 4, v: Math.round((k * yMax) / 4) }));
+
+  const renderChart = () => {
+    if (n === 0) return <div className="muted">该区间内暂无请求数据。</div>;
+    return (
+      <svg viewBox={`0 0 ${W} ${H}`} className="usage-chart" preserveAspectRatio="xMidYMid meet" role="img" aria-label="每日请求量与缓存命中分布">
+        {gridLines.map((g) => (
+          <g key={g.v}>
+            <line x1={padL} x2={W - padR} y1={g.y} y2={g.y} className="usage-gridline" />
+            <text x={padL - 8} y={g.y + 4} className="usage-ylabel">{nf(g.v)}</text>
+          </g>
+        ))}
+        {daily.map((d, i) => {
+          const x = padL + i * slotW + (slotW - barW) / 2;
+          const barH = (d.requests / yMax) * chartH;
+          const cachedH = (Math.min(d.cachedRequests, d.requests) / yMax) * chartH;
+          return (
+            <g key={d.day}>
+              <title>{`${d.day}
+请求 ${d.requests} 次（缓存命中 ${d.cachedRequests}）
+Prompt ${d.promptTokens} · Completion ${d.completionTokens}`}</title>
+              <rect x={x} y={padT + chartH - barH} width={barW} height={barH - cachedH} rx={barW / 2} className="usage-uncached" />
+              {cachedH > 0 && (
+                <rect x={x} y={padT + chartH - cachedH} width={barW} height={cachedH} rx={barW / 2} className="usage-cached" />
+              )}
+              {(n <= 10 || i % Math.ceil(n / 10) === 0) && (
+                <text x={x + barW / 2} y={H - 10} textAnchor="middle" className="usage-xlabel">{d.day.slice(5)}</text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    );
   };
 
   return (
     <>
-      <div className="card">
-        <div className="h2">新建租户</div>
-        <div className="row" style={{ marginTop: 6 }}>
-          <div><label>slug（标识）</label><input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="demo-clinic" className="mono" /></div>
-          <div><label>名称</label><input value={name} onChange={(e) => setName(e.target.value)} placeholder="康乐诊所" /></div>
-          <div><label>行业</label>
-            <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
-              {INDUSTRIES.map((i) => <option key={i.value} value={i.value}>{i.label}</option>)}
-            </select>
-          </div>
+      {data && (
+        <div className="metric-grid">
+          {metrics.map((m) => (
+            <div key={m.label} className={`metric-card${m.accent ? ' ok' : ''}`}>
+              <div className={`metric-icon${m.accent ? ' ok' : ''}`}><Icon name={m.icon} size={18} /></div>
+              <div className="metric-body">
+                <div className="metric-label">{m.label}</div>
+                <div className="metric-value">{m.value}</div>
+                <div className="metric-foot">{m.foot}</div>
+              </div>
+            </div>
+          ))}
         </div>
-        <label>系统提示词（可选）</label>
-        <textarea value={sysPrompt} onChange={(e) => setSysPrompt(e.target.value)} placeholder="客服话术风格 / 角色设定" />
-        <div style={{ marginTop: 12, textAlign: 'right' }}>
-          <button onClick={create} disabled={busy}>{busy ? '创建中…' : '创建租户'}</button>
-        </div>
-      </div>
+      )}
 
       <div className="card">
-        <div className="h2">租户列表（{list.length}）</div>
-        {list.length === 0 && <div className="muted">暂无租户，先在上方创建一个</div>}
-        {list.length > 0 && (
-          <div className="table-wrap"><table>
-            <thead><tr><th>ID</th><th>slug</th><th>名称</th><th>行业</th><th className="actions">操作</th></tr></thead>
-            <tbody>
-            {list.map((t) => (
-                <tr key={t.id}>
-                  <td>{t.id}</td><td className="mono">{t.slug}</td><td>{t.name}</td><td>{t.industry}</td>
-                  <td className="actions"><button className="ghost" onClick={() => issueKey(t.slug, t.id)}>签发 API Key</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
-        )}
-        {Object.entries(keyFor).map(([tid, k]) => (
-          <div key={tid} className="notice-banner" style={{ marginTop: 12 }}>
-            租户 #{tid} 的新 Key（仅显示一次）：<span className="mono">{k}</span>{' '}
-            <button className="ghost" style={{ padding: '2px 10px', fontSize: 12, marginLeft: 6 }} onClick={() => copyKey(Number(tid), k)}>
-              <>{copied === Number(tid) && <Icon name="check" size={13} />}{copied === Number(tid) ? '已复制' : '复制'}</>
-            </button>
-            <div className="muted" style={{ marginTop: 4 }}>请妥善保存，填入对话页设置或知识库页使用。</div>
+        <div className="row">
+          <div style={{ flex: '0 0 180px' }}>
+            <label>时间范围</label>
+            <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
+              <option value={1}>近 1 天</option>
+              <option value={7}>近 7 天</option>
+              <option value={30}>近 30 天</option>
+            </select>
           </div>
-        ))}
+          <div style={{ flex: '0 0 auto', paddingBottom: 1 }}>
+            <button className="ghost" onClick={load} disabled={busy}>{busy ? '加载中…' : '刷新'}</button>
+          </div>
+        </div>
         {err && <div className="err">{err}</div>}
       </div>
+
+      {data && (
+        <div className="card">
+          <div className="chart-head">
+            <div className="h2">每日请求量</div>
+            <div className="chart-legend">
+              <span><i className="dot uncached" />未命中</span>
+              <span><i className="dot cached" />缓存命中</span>
+            </div>
+          </div>
+          <p className="sub" style={{ marginTop: 6 }}>柱形按天展示请求次数，绿色为其中命中的 L1/L2 语义缓存请求。悬停查看明细。</p>
+          {renderChart()}
+        </div>
+      )}
     </>
   );
 }
 
 function KbTab({ notify }: { notify: Notify }) {
-  const [tenants, setTenants] = useState<TenantRow[]>([]);
-  const [slug, setSlug] = useState('');
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('aics_api_key') ?? '');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem(GATEWAY_KEY_STORAGE) ?? DEFAULT_GATEWAY_KEY);
   const [docs, setDocs] = useState<KbDoc[]>([]);
   const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-
-  useEffect(() => {
-    admin.listTenants().then((r) => {
-      const rows = r.tenants as unknown as TenantRow[];
-      setTenants(rows);
-      if (rows[0]) setSlug(rows[0].slug);
-    }).catch((e) => setErr(e instanceof Error ? e.message : String(e)));
-  }, []);
+  const [open, setOpen] = useState<number | null>(null);
+  const [query, setQuery] = useState<string>('');
+  const [preview, setPreview] = useState<{ hits: KbPreviewHit[]; hint: string; doc: KbDoc } | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
 
   const loadDocs = async () => {
-    if (!apiKey.startsWith('aics_')) { setErr('请先填写该租户的 API Key（须 aics_ 开头）'); return; }
+    if (!apiKey.trim()) { setErr('请填写网关 API Key'); return; }
     setErr(''); setBusy(true);
     try {
-      localStorage.setItem('aics_api_key', apiKey.trim());
-      const res = await fetch('/v1/knowledge/documents', {
-        headers: { Authorization: `Bearer ${apiKey.trim()}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      const r = (await res.json()) as { documents: KbDoc[] };
-      setDocs(r.documents ?? []);
+      localStorage.setItem(GATEWAY_KEY_STORAGE, apiKey.trim());
+      setDocs(((await knowledge.list(apiKey.trim())).documents ?? []));
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
 
+  const toggleOpen = (doc: KbDoc) => {
+    if (open === doc.id) { setOpen(null); setPreview(null); return; }
+    setOpen(doc.id); setQuery(''); setPreview(null);
+    knowledge.detail(doc.id, apiKey.trim())
+      .then((r) => setPreview({ hits: [], hint: r.hint ?? '', doc: r.document }))
+      .catch(() => setPreview({ hits: [], hint: '加载文档信息失败', doc }));
+  };
+
+  const previewSearch = async () => {
+    if (open == null) return;
+    if (query.trim().length < 2) { setErr('检索词至少 2 个字'); return; }
+    setErr(''); setPreviewBusy(true); setPreview(null);
+    try {
+      const r = await knowledge.detail(open, apiKey.trim(), query.trim());
+      setPreview({ hits: r.preview ?? [], hint: r.hint ?? '', doc: r.document });
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setPreviewBusy(false); }
+  };
+
+  const remove = async (doc: KbDoc) => {
+    if (!window.confirm(`确认删除文档「${doc.name}」？其 ${doc.chunk_count} 个切片将从向量库与数据库一并移除。`)) return;
+    setErr('');
+    try {
+      await knowledge.remove(doc.id, apiKey.trim());
+      notify('ok', `文档「${doc.name}」已删除`);
+      if (open === doc.id) { setOpen(null); setPreview(null); }
+      await loadDocs();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+  };
+
   const upload = async () => {
-    if (!slug || !apiKey.startsWith('aics_') || !name.trim() || !text.trim()) {
-      setErr('请填写租户对应 API Key、文档名与内容'); return;
+    if (!apiKey.trim() || !name.trim() || !text.trim()) {
+      setErr('请填写网关 API Key、文档名与内容'); return;
     }
     setErr(''); setBusy(true);
     try {
@@ -251,14 +294,8 @@ function KbTab({ notify }: { notify: Notify }) {
     <>
       <div className="card">
         <div className="h2">上传文档</div>
-        <div className="row">
-          <div><label>租户</label>
-            <select value={slug} onChange={(e) => setSlug(e.target.value)}>
-              {tenants.map((t) => <option key={t.id} value={t.slug}>{t.name}（{t.slug}）</option>)}
-            </select>
-          </div>
-          <div><label>该租户 API Key</label><input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="aics_xxxx_yyyy" className="mono" /></div>
-        </div>
+        <label>网关 API Key（统一 Key，所有接入端共用）</label>
+        <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="GATEWAY_API_KEY" className="mono" />
         <label>文档名</label>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="门诊须知" />
         <label>文档内容</label>
@@ -274,13 +311,55 @@ function KbTab({ notify }: { notify: Notify }) {
         {docs.length === 0 && <div className="muted">暂无文档，上传或点【刷新文档列表】加载</div>}
         {docs.length > 0 && (
           <div className="table-wrap"><table>
-            <thead><tr><th>ID</th><th>名称</th><th>切片数</th></tr></thead>
+            <thead><tr><th>ID</th><th>名称</th><th>切片数</th><th className="actions">操作</th></tr></thead>
             <tbody>
               {docs.map((d) => (
-                <tr key={d.id}><td>{d.id}</td><td>{d.name}</td><td>{d.chunk_count}</td></tr>
+                <tr key={d.id}>
+                  <td>{d.id}</td><td>{d.name}</td><td>{d.chunk_count}</td>
+                  <td className="actions">
+                    <button className="ghost" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => toggleOpen(d)}>
+                      {open === d.id ? '收起' : '检索预览'}
+                    </button>
+                    <button className="ghost" style={{ padding: '4px 12px', fontSize: 12, color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.3)' }} onClick={() => remove(d)}>
+                      <Icon name="trash" size={13} /> 删除
+                    </button>
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table></div>
+        )}
+
+        {open != null && (
+          <div className="kb-preview card" style={{ marginTop: 14, border: '1px solid var(--brand)' }}>
+            <div className="h2">检索预览</div>
+            <p className="sub">输入一个问题，验证该文档能否被检索命中、命中哪些切片（对全库混合检索后按本文档过滤）。</p>
+            <div className="row">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="例如：你们的营业时间是？"
+                onKeyDown={(e) => e.key === 'Enter' && previewSearch()}
+              />
+              <button onClick={previewSearch} disabled={previewBusy} style={{ flex: '0 0 auto' }}>
+                {previewBusy ? '检索中…' : '检索'}
+              </button>
+            </div>
+            {preview?.hint && !preview.hits.length && <div className="muted" style={{ marginTop: 12 }}>{preview.hint}</div>}
+            {preview && preview.hits.length > 0 && (
+              <div className="kb-hits">
+                {preview.hits.map((h) => (
+                  <div key={h.id} className="kb-hit">
+                    <div className="kb-hit-meta">
+                      <span className="badge meta">Chunk #{h.chunkIndex}</span>
+                      <span className="badge meta">score {h.score.toFixed(3)}</span>
+                    </div>
+                    <pre className="kb-hit-text mono">{h.text}</pre>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
         {err && <div className="err">{err}</div>}
       </div>

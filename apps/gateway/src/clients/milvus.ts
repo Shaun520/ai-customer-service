@@ -497,7 +497,7 @@ export const MilvusClient = {
           : (data as Array<T & { distance: number }>);
       // Milvus v2 hybrid_search(RRF) 结果通常只含 distance + id，不含原始字段。
       // 命中项缺关键输出字段时，先按 dense 向量检索补齐字段（dense search 返回结构断言含字段）。
-      const needsFields = hits.some((h) => h.text === undefined || h.doc_name === undefined);
+      const needsFields = hits.some((h) => (h as Record<string, unknown>).text === undefined || (h as Record<string, unknown>).doc_name === undefined);
       if (needsFields && hits.length > 0) {
         console.warn(
           '[milvus] hybrid_search lacks output fields, backfilling via dense search (RRF only via dense)',
@@ -518,7 +518,7 @@ export const MilvusClient = {
           const byId = new Map(dense.map((r) => [String(r.id), r]));
           const merged: Array<T & { distance: number }> = [];
           for (const h of hits) {
-            const row = byId.get(String(h.id));
+            const row = byId.get(String((h as Record<string, unknown>).id));
             const m = { ...h };
             if (row) Object.assign(m, row);
             merged.push(m);

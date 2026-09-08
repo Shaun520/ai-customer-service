@@ -2,11 +2,11 @@
  * 可追溯 RAG：按 trace_id 反查一次问答的完整链路
  *   护栏判定 → 检索记录（命中 chunk）→ 上下行消息 → 审核工单 → Token 用量
  *
- * 鉴权：管理员令牌（X-Admin-Token，可跨租户）或接入方 API Key（仅本租户）。
+ * 鉴权：管理员令牌（X-Admin-Token，不限租户）或统一网关 API Key（限定默认租户）。
  */
 import { Hono } from 'hono';
 import { and, eq } from 'drizzle-orm';
-import { adminAuth, lookupTenantByKey } from '../gateway/auth.js';
+import { adminAuth, resolveTenantIdByKey } from '../gateway/auth.js';
 import { db } from '../db/index.js';
 import {
   guardrailEvents,
@@ -22,7 +22,7 @@ export const traceRoutes = new Hono();
 /**
  * 解析访问范围：
  *  - 管理员：{ tenantId: undefined }（不限租户）
- *  - 接入方 API Key：{ tenantId }（仅本租户）
+ *  - 统一网关 API Key：{ tenantId }（限定默认租户）
  *  - 均无：null（401）
  */
 async function resolveScope(c: {
@@ -32,9 +32,7 @@ async function resolveScope(c: {
   const header = c.req.header('Authorization') ?? '';
   const raw = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
   if (!raw) return null;
-  const row = await lookupTenantByKey(raw);
-  if (!row) return null;
-  return { tenantId: row.tenantId };
+  return resolveTenantIdByKey(raw);
 }
 
 traceRoutes.get('/:traceId', async (c) => {

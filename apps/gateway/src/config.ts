@@ -22,6 +22,12 @@ export const config = {
   port: Number(process.env.PORT ?? 8787),
   adminToken: process.env.ADMIN_TOKEN ?? 'change-me-admin-token',
 
+  /** 统一网关 API Key：所有接入端（多端/多系统）共用同一把，不再按租户/客户分别签发 */
+  gatewayKey: process.env.GATEWAY_API_KEY ?? 'aics-local-gateway-key',
+  /** 单租户模式：全系统固定使用这一个租户（slug），知识库/护栏/用量统一挂载其下 */
+  tenantSlug: process.env.TENANT_SLUG ?? 'aics',
+  tenantName: process.env.TENANT_NAME ?? 'AICS 智能客服',
+
   databaseUrl: process.env.DATABASE_URL ?? 'postgres://aics:aics@localhost:5533/aics',
 
   milvus: {
