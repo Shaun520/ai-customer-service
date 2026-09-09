@@ -78,3 +78,47 @@ export const trace = {
   get: (traceId: string) =>
     request<Record<string, unknown>>(`/trace/${encodeURIComponent(traceId)}`, { auth: 'admin' }),
 };
+
+// ---------- 对话模型提供商配置 ----------
+
+export interface ModelProviderRow {
+  id: number;
+  name: string;
+  baseUrl: string;
+  apiKey: string; // 已脱敏（env 来源为明文 mock key）
+  model: string;
+  enabled: boolean;
+  isDefault: boolean;
+  task: string;
+  source: 'env' | 'db';
+}
+export interface ModelProviderInput {
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  enabled: boolean;
+  isDefault: boolean;
+  task: string;
+}
+
+export const models = {
+  list: () => request<{ providers: ModelProviderRow[]; count: number }>('/admin/models', { auth: 'admin' }),
+  create: (body: ModelProviderInput) =>
+    request<{ provider: { id: number; name: string }; updated: boolean; note: string }>('/admin/models', {
+      method: 'POST',
+      body,
+      auth: 'admin',
+    }),
+  update: (id: number, body: ModelProviderInput) =>
+    request<{ provider: { id: number; name: string }; updated: boolean; note: string }>(`/admin/models/${id}`, {
+      method: 'PUT',
+      body,
+      auth: 'admin',
+    }),
+  remove: (id: number) =>
+    request<{ deleted: number; updated: boolean; note: string }>(`/admin/models/${id}`, {
+      method: 'DELETE',
+      auth: 'admin',
+    }),
+};

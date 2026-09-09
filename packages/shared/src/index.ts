@@ -154,3 +154,17 @@ export const ReviewActionSchema = z.object({
   revisedDraft: z.string().max(8000).optional(),
 });
 export type ReviewAction = z.infer<typeof ReviewActionSchema>;
+
+// ---------- 对话 LLM 提供商配置 ----------
+
+/** 管理员新增/更新模型提供商时提交的结构 */
+export const ModelProviderInputSchema = z.object({
+  name: z.string().min(1).max(64).regex(/^[a-zA-Z0-9_\-]+$/, 'name 仅允许字母/数字/下划线/中划线'),
+  baseUrl: z.string().min(1).max(512),
+  apiKey: z.string().min(1).max(512),
+  model: z.string().min(1).max(128),
+  enabled: z.boolean().optional().default(true),
+  isDefault: z.boolean().optional().default(false),
+  task: z.string().max(32).optional().default('default'),
+});
+export type ModelProviderInput = z.infer<typeof ModelProviderInputSchema>;

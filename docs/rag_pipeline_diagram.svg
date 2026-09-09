@@ -1,0 +1,344 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 2400" font-family="'Cascadia Code','Fira Code','Consolas','Microsoft YaHei',monospace" font-size="15" fill="#e0e0e0">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+    <linearGradient id="phaseOff" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f3460"/>
+      <stop offset="100%" stop-color="#1a1a4e"/>
+    </linearGradient>
+    <linearGradient id="phaseOn" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#533483"/>
+      <stop offset="100%" stop-color="#2b1055"/>
+    </linearGradient>
+    <linearGradient id="phaseChat" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#e94560"/>
+      <stop offset="100%" stop-color="#533483"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#e94560"/>
+    </marker>
+    <marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#00d2ff"/>
+    </marker>
+    <marker id="arrY" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffd700"/>
+    </marker>
+    <marker id="arrP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b388ff"/>
+    </marker>
+  </defs>
+
+  <rect width="1500" height="2400" fill="url(#bg)"/>
+
+  <text x="750" y="45" text-anchor="middle" font-size="26" font-weight="bold" fill="#e94560" filter="url(#glow)">AICS 智能客服 · RAG 全流程结构图</text>
+  <text x="750" y="72" text-anchor="middle" font-size="14" fill="#888">离线入库 → 在线检索 → 对话编排 → 响应输出</text>
+
+  <!-- ==================== PHASE 1 ==================== -->
+  <rect x="30" y="90" width="1440" height="460" rx="14" fill="url(#phaseOff)" opacity="0.45"/>
+  <text x="55" y="120" font-size="20" font-weight="bold" fill="#00d2ff"> 离线入库阶段（文档 → 向量）</text>
+
+  <rect x="60" y="140" width="200" height="90" rx="10" fill="#1a1a3e" stroke="#00d2ff" stroke-width="2"/>
+  <text x="160" y="172" text-anchor="middle" font-size="16" fill="#00d2ff" font-weight="bold">📄 文档上传</text>
+  <text x="160" y="195" text-anchor="middle" font-size="12" fill="#aaa">Admin 端上传</text>
+  <text x="160" y="215" text-anchor="middle" font-size="12" fill="#aaa">.txt / .md / PDF</text>
+
+  <line x1="260" y1="185" x2="310" y2="185" stroke="#00d2ff" stroke-width="2" marker-end="url(#arrG)"/>
+
+  <rect x="310" y="140" width="230" height="90" rx="10" fill="#1a1a3e" stroke="#00d2ff" stroke-width="2"/>
+  <text x="425" y="170" text-anchor="middle" font-size="16" fill="#00d2ff" font-weight="bold">✂️ 文本分块 chunkText</text>
+  <text x="425" y="193" text-anchor="middle" font-size="12" fill="#aaa">chunkSize=500 overlap=80</text>
+  <text x="425" y="215" text-anchor="middle" font-size="12" fill="#aaa">段落/句子边界智能断开</text>
+
+  <line x1="540" y1="185" x2="590" y2="185" stroke="#00d2ff" stroke-width="2" marker-end="url(#arrG)"/>
+
+  <rect x="590" y="140" width="230" height="90" rx="10" fill="#1a1a3e" stroke="#00d2ff" stroke-width="2"/>
+  <text x="705" y="170" text-anchor="middle" font-size="16" fill="#00d2ff" font-weight="bold"> 向量化 embed()</text>
+  <text x="705" y="193" text-anchor="middle" font-size="12" fill="#aaa">Ollama bge-m3 (1024维)</text>
+  <text x="705" y="215" text-anchor="middle" font-size="12" fill="#aaa">失败降级 → mock向量</text>
+
+  <line x1="820" y1="185" x2="870" y2="185" stroke="#00d2ff" stroke-width="2" marker-end="url(#arrG)"/>
+
+  <rect x="870" y="140" width="230" height="90" rx="10" fill="#1a1a3e" stroke="#00d2ff" stroke-width="2"/>
+  <text x="985" y="170" text-anchor="middle" font-size="16" fill="#00d2ff" font-weight="bold">💾 写入 Milvus</text>
+  <text x="985" y="193" text-anchor="middle" font-size="12" fill="#aaa">ensureCollection → insert</text>
+  <text x="985" y="215" text-anchor="middle" font-size="12" fill="#aaa">分批≤200条 / partition</text>
+
+  <line x1="1100" y1="185" x2="1150" y2="185" stroke="#00d2ff" stroke-width="2" marker-end="url(#arrG)"/>
+
+  <rect x="1150" y="140" width="300" height="90" rx="10" fill="#1a1a3e" stroke="#00d2ff" stroke-width="2"/>
+  <text x="1300" y="170" text-anchor="middle" font-size="16" fill="#00d2ff" font-weight="bold"> 集合 aics_kb_{slug}</text>
+  <text x="1300" y="193" text-anchor="middle" font-size="12" fill="#aaa">vector(HNSW/COSINE)</text>
+  <text x="1300" y="215" text-anchor="middle" font-size="12" fill="#aaa">+ sparse(BM25倒排索引)</text>
+
+  <rect x="60" y="255" width="680" height="280" rx="10" fill="#0d1b2a" stroke="#444" stroke-width="1.5"/>
+  <text x="80" y="282" font-size="17" fill="#ffd700" font-weight="bold">Milvus Schema 详情</text>
+  <line x1="80" y1="292" x2="720" y2="292" stroke="#333"/>
+  <text x="80" y="316" font-size="14" fill="#ccc" font-weight="bold">字段：</text>
+  <text x="95" y="340" font-size="13" fill="#aaa">• id (Int64, autoID)          • vector (FloatVector, dim=1024)</text>
+  <text x="95" y="362" font-size="13" fill="#aaa">• sparse (SparseFloatVector, BM25函数输出)</text>
+  <text x="95" y="384" font-size="13" fill="#aaa">• text (VarChar, max=8192, enable_analyzer=true)</text>
+  <text x="95" y="406" font-size="13" fill="#aaa">• doc_name (VarChar, max=512)  • chunk_index (Int64)</text>
+  <text x="95" y="428" font-size="13" fill="#aaa">• doc_id (Int64)  • tenant_id (Int64)</text>
+
+  <text x="80" y="462" font-size="14" fill="#ccc" font-weight="bold">索引：</text>
+  <text x="95" y="486" font-size="13" fill="#aaa">• vector_index: HNSW(M=16, efConstruction=200) / COSINE</text>
+  <text x="95" y="508" font-size="13" fill="#aaa">• sparse_index: SPARSE_INVERTED_INDEX(DAAT_MAXSCORE)</text>
+  <text x="95" y="530" font-size="13" fill="#aaa">  BM25参数: k1=1.2, b=0.75</text>
+
+  <rect x="760" y="255" width="690" height="280" rx="10" fill="#0d1b2a" stroke="#444" stroke-width="1.5"/>
+  <text x="780" y="282" font-size="17" fill="#ffd700" font-weight="bold">Embedding 客户端 (llm.ts)</text>
+  <line x1="780" y1="292" x2="1430" y2="292" stroke="#333"/>
+  <text x="780" y="318" font-size="14" fill="#ccc" font-weight="bold">embed(texts[]) → number[][]</text>
+  <text x="780" y="344" font-size="13" fill="#aaa">1. 检查 EMBEDDING_BASE_URL / API_KEY / MODEL</text>
+  <text x="780" y="366" font-size="13" fill="#aaa">2. 调用远程 /embeddings (OpenAI兼容, 30s超时)</text>
+  <text x="780" y="388" font-size="13" fill="#aaa">3. 校验返回维度 == EMBEDDING_DIM (1024)</text>
+  <text x="780" y="410" font-size="13" fill="#aaa">4. 失败降级 → mockEmbedding (FNV-1a哈希→归一化)</text>
+
+  <text x="780" y="446" font-size="14" fill="#ccc" font-weight="bold">Milvus 客户端 (milvus.ts)</text>
+  <text x="780" y="472" font-size="13" fill="#aaa">• 状态机: Disconnected→Connecting→Connected→Error</text>
+  <text x="780" y="494" font-size="13" fill="#aaa">• 熔断器: 连续5次失败→熔断15s, 指数退避重连</text>
+  <text x="780" y="516" font-size="13" fill="#aaa">• Zod Fail-Fast 参数校验 (请求前白名单校验)</text>
+  <text x="780" y="538" font-size="13" fill="#aaa">• RESTful v2 API (:19530/v2/vectordb/*)</text>
+
+  <!-- ==================== PHASE 2 ==================== -->
+  <rect x="30" y="575" width="1440" height="620" rx="14" fill="url(#phaseOn)" opacity="0.4"/>
+  <text x="55" y="605" font-size="20" font-weight="bold" fill="#b388ff"> 在线检索阶段（query → chunks）</text>
+
+  <rect x="60" y="625" width="340" height="60" rx="10" fill="#1a1a3e" stroke="#b388ff" stroke-width="2"/>
+  <text x="230" y="650" text-anchor="middle" font-size="16" fill="#b388ff" font-weight="bold">用户 query: "OAuth token 过期怎么处理"</text>
+  <text x="230" y="672" text-anchor="middle" font-size="12" fill="#aaa">minQueryLength ≥ 4 才触发检索</text>
+
+  <line x1="230" y1="685" x2="230" y2="720" stroke="#b388ff" stroke-width="2"/>
+  <line x1="230" y1="720" x2="470" y2="720" stroke="#b388ff" stroke-width="2"/>
+  <line x1="230" y1="720" x2="770" y2="720" stroke="#b388ff" stroke-width="2"/>
+  <line x1="470" y1="720" x2="470" y2="745" stroke="#b388ff" stroke-width="2" marker-end="url(#arrP)"/>
+  <line x1="770" y1="720" x2="770" y2="745" stroke="#b388ff" stroke-width="2" marker-end="url(#arrP)"/>
+
+  <rect x="350" y="745" width="240" height="210" rx="10" fill="#1a1a3e" stroke="#00d2ff" stroke-width="2.5"/>
+  <text x="470" y="775" text-anchor="middle" font-size="17" fill="#00d2ff" font-weight="bold">Dense 通道</text>
+  <text x="470" y="798" text-anchor="middle" font-size="13" fill="#aaa">(向量语义检索)</text>
+  <line x1="370" y1="810" x2="570" y2="810" stroke="#333"/>
+  <text x="470" y="835" text-anchor="middle" font-size="13" fill="#ccc">embedOne(query)</text>
+  <text x="470" y="857" text-anchor="middle" font-size="13" fill="#ccc">→ 1024维向量</text>
+  <text x="470" y="879" text-anchor="middle" font-size="13" fill="#ccc">ANN HNSW 搜索</text>
+  <text x="470" y="901" text-anchor="middle" font-size="13" fill="#ccc">metric = COSINE</text>
+  <text x="470" y="930" text-anchor="middle" font-size="14" fill="#00d2ff" font-weight="bold">"意思相近"</text>
+  <text x="470" y="950" text-anchor="middle" font-size="11" fill="#aaa">能召回:</text>
+  <text x="470" y="968" text-anchor="middle" font-size="11" fill="#aaa">"认证凭据失效的解决方案"</text>
+
+  <rect x="650" y="745" width="240" height="210" rx="10" fill="#1a1a3e" stroke="#ffd700" stroke-width="2.5"/>
+  <text x="770" y="775" text-anchor="middle" font-size="17" fill="#ffd700" font-weight="bold">Sparse 通道</text>
+  <text x="770" y="798" text-anchor="middle" font-size="13" fill="#aaa">(BM25 关键词检索)</text>
+  <line x1="670" y1="810" x2="870" y2="810" stroke="#333"/>
+  <text x="770" y="835" text-anchor="middle" font-size="13" fill="#ccc">sparseData=[query原文]</text>
+  <text x="770" y="857" text-anchor="middle" font-size="13" fill="#ccc">Milvus内置BM25函数</text>
+  <text x="770" y="879" text-anchor="middle" font-size="13" fill="#ccc">SPARSE_INVERTED_INDEX</text>
+  <text x="770" y="901" text-anchor="middle" font-size="13" fill="#ccc">k1=1.2  b=0.75</text>
+  <text x="770" y="930" text-anchor="middle" font-size="14" fill="#ffd700" font-weight="bold">"字面命中"</text>
+  <text x="770" y="950" text-anchor="middle" font-size="11" fill="#aaa">能召回:</text>
+  <text x="770" y="968" text-anchor="middle" font-size="11" fill="#aaa">"OAuth token 过期"(精确匹配)</text>
+
+  <line x1="470" y1="955" x2="470" y2="1000" stroke="#b388ff" stroke-width="2"/>
+  <line x1="770" y1="955" x2="770" y2="1000" stroke="#b388ff" stroke-width="2"/>
+  <line x1="470" y1="1000" x2="620" y2="1000" stroke="#b388ff" stroke-width="2"/>
+  <line x1="770" y1="1000" x2="620" y2="1000" stroke="#b388ff" stroke-width="2"/>
+  <line x1="620" y1="1000" x2="620" y2="1025" stroke="#b388ff" stroke-width="2" marker-end="url(#arrP)"/>
+
+  <rect x="490" y="1025" width="260" height="90" rx="10" fill="#1a1a3e" stroke="#e94560" stroke-width="3" filter="url(#glow)"/>
+  <text x="620" y="1055" text-anchor="middle" font-size="18" fill="#e94560" font-weight="bold">RRF 融合排序</text>
+  <text x="620" y="1080" text-anchor="middle" font-size="13" fill="#ccc">rrfK=60  score = Σ 1/(k+rank_i)</text>
+  <text x="620" y="1102" text-anchor="middle" font-size="13" fill="#ccc">两路互补，统一打分排序</text>
+
+  <line x1="620" y1="1115" x2="620" y2="1145" stroke="#e94560" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="460" y="1145" width="320" height="60" rx="10" fill="#1a1a3e" stroke="#b388ff" stroke-width="2"/>
+  <text x="620" y="1172" text-anchor="middle" font-size="15" fill="#b388ff" font-weight="bold">后处理: 过滤 + 格式化</text>
+  <text x="620" y="1194" text-anchor="middle" font-size="12" fill="#aaa">score ≥ threshold(0.5) → RetrievedChunk[]</text>
+
+  <rect x="60" y="1145" width="370" height="60" rx="10" fill="#1a1a3e" stroke="#888" stroke-width="1.5"/>
+  <text x="245" y="1172" text-anchor="middle" font-size="15" fill="#888" font-weight="bold">审计落库 retrieval_audits</text>
+  <text x="245" y="1194" text-anchor="middle" font-size="12" fill="#666">query / collection / topK / results / latency / success</text>
+
+  <rect x="60" y="1225" width="680" height="155" rx="10" fill="#0d1b2a" stroke="#444" stroke-width="1.5"/>
+  <text x="80" y="1250" font-size="16" fill="#ffd700" font-weight="bold">hybridSearch 实现细节 (milvus.ts)</text>
+  <line x1="80" y1="1258" x2="720" y2="1258" stroke="#333"/>
+  <text x="80" y="1280" font-size="13" fill="#ccc">1. Zod校验 HybridSearchParamsSchema</text>
+  <text x="80" y="1300" font-size="13" fill="#ccc">2. 构造 hybrid_search 请求: search=[dense{}, sparse{}], rerank={rrf, k:60}</text>
+  <text x="80" y="1320" font-size="13" fill="#ccc">3. POST /v2/vectordb/entities/hybrid_search</text>
+  <text x="80" y="1340" font-size="13" fill="#ccc">4. 结果缺字段 → dense search 回补  |  hybrid失败 → 降级dense-only</text>
+  <text x="80" y="1362" font-size="13" fill="#e94560"> 降级策略: sparse不可用时自动fallback到dense-only检索</text>
+
+  <rect x="760" y="1225" width="690" height="155" rx="10" fill="#0d1b2a" stroke="#444" stroke-width="1.5"/>
+  <text x="780" y="1250" font-size="16" fill="#ffd700" font-weight="bold">RAG 配置参数 (config.ts)</text>
+  <line x1="780" y1="1258" x2="1430" y2="1258" stroke="#333"/>
+  <text x="780" y="1282" font-size="13" fill="#ccc">rag.topK = 5              (返回Top5 chunks)</text>
+  <text x="780" y="1304" font-size="13" fill="#ccc">rag.scoreThreshold = 0.5   (最低相似度阈值)</text>
+  <text x="780" y="1326" font-size="13" fill="#ccc">rag.chunkSize = 500        (分块大小, 字符数)</text>
+  <text x="780" y="1348" font-size="13" fill="#ccc">rag.chunkOverlap = 80      (块间重叠)</text>
+  <text x="780" y="1370" font-size="13" fill="#ccc">rag.minQueryLength = 4     (短查询跳过检索)</text>
+
+  <!-- ==================== PHASE 3 ==================== -->
+  <rect x="30" y="1405" width="1440" height="970" rx="14" fill="url(#phaseChat)" opacity="0.25"/>
+  <text x="55" y="1435" font-size="20" font-weight="bold" fill="#e94560"> 对话编排管道（chat.ts · handleChatCompletion）</text>
+
+  <rect x="60" y="1455" width="170" height="60" rx="10" fill="#1a1a3e" stroke="#888" stroke-width="1.5"/>
+  <text x="145" y="1480" text-anchor="middle" font-size="15" fill="#888" font-weight="bold">① Auth 鉴权</text>
+  <text x="145" y="1502" text-anchor="middle" font-size="11" fill="#666">Bearer统一网关Key</text>
+  <line x1="230" y1="1485" x2="270" y2="1485" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="270" y="1455" width="170" height="60" rx="10" fill="#1a1a3e" stroke="#ffd700" stroke-width="2"/>
+  <text x="355" y="1480" text-anchor="middle" font-size="15" fill="#ffd700" font-weight="bold">② Guardrail</text>
+  <text x="355" y="1502" text-anchor="middle" font-size="11" fill="#aaa">allow/confirm/block</text>
+  <line x1="440" y1="1485" x2="480" y2="1485" stroke="#ffd700" stroke-width="2" marker-end="url(#arrY)"/>
+
+  <rect x="480" y="1455" width="170" height="60" rx="10" fill="#1a1a3e" stroke="#00d2ff" stroke-width="2"/>
+  <text x="565" y="1480" text-anchor="middle" font-size="15" fill="#00d2ff" font-weight="bold"> Cache 缓存</text>
+  <text x="565" y="1502" text-anchor="middle" font-size="11" fill="#aaa">L1精确→L2语义</text>
+  <line x1="650" y1="1485" x2="690" y2="1485" stroke="#00d2ff" stroke-width="2" marker-end="url(#arrG)"/>
+
+  <rect x="690" y="1455" width="170" height="60" rx="10" fill="#1a1a3e" stroke="#e94560" stroke-width="3" filter="url(#glow)"/>
+  <text x="775" y="1480" text-anchor="middle" font-size="15" fill="#e94560" font-weight="bold">④ RAG 检索</text>
+  <text x="775" y="1502" text-anchor="middle" font-size="11" fill="#aaa">retrieve()→chunks</text>
+  <line x1="860" y1="1485" x2="900" y2="1485" stroke="#e94560" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="900" y="1455" width="170" height="60" rx="10" fill="#1a1a3e" stroke="#b388ff" stroke-width="2"/>
+  <text x="985" y="1480" text-anchor="middle" font-size="15" fill="#b388ff" font-weight="bold">⑤ PII 脱敏</text>
+  <text x="985" y="1502" text-anchor="middle" font-size="11" fill="#aaa">redactPii→占位符</text>
+  <line x1="1070" y1="1485" x2="1110" y2="1485" stroke="#b388ff" stroke-width="2" marker-end="url(#arrP)"/>
+
+  <rect x="1110" y="1455" width="170" height="60" rx="10" fill="#1a1a3e" stroke="#00d2ff" stroke-width="2"/>
+  <text x="1195" y="1480" text-anchor="middle" font-size="15" fill="#00d2ff" font-weight="bold">⑥ LLM 推理</text>
+  <text x="1195" y="1502" text-anchor="middle" font-size="11" fill="#aaa">路由+重试+Fallback</text>
+  <line x1="1280" y1="1485" x2="1320" y2="1485" stroke="#00d2ff" stroke-width="2" marker-end="url(#arrG)"/>
+
+  <rect x="1320" y="1455" width="140" height="60" rx="10" fill="#1a1a3e" stroke="#e94560" stroke-width="2"/>
+  <text x="1390" y="1480" text-anchor="middle" font-size="15" fill="#e94560" font-weight="bold">⑦ 响应</text>
+  <text x="1390" y="1502" text-anchor="middle" font-size="11" fill="#aaa">组装+落库</text>
+
+  <rect x="60" y="1535" width="460" height="160" rx="10" fill="#0d1b2a" stroke="#ffd700" stroke-width="1.5"/>
+  <text x="80" y="1560" font-size="16" fill="#ffd700" font-weight="bold">Guardrail 三态判定</text>
+  <line x1="80" y1="1570" x2="500" y2="1570" stroke="#333"/>
+  <text x="80" y="1594" font-size="13" fill="#ccc">• allow: 正常放行 → 继续RAG+LLM</text>
+  <text x="80" y="1616" font-size="13" fill="#ccc">• confirm: 高风险 → 生成草稿冻结入reviewQueue</text>
+  <text x="80" y="1638" font-size="13" fill="#ccc">  返回"已转交人工顾问"，不直接下发</text>
+  <text x="80" y="1660" font-size="13" fill="#ccc">• block: 拒绝作答 → 行业固定话术</text>
+  <text x="80" y="1682" font-size="12" fill="#e94560">→ 每次判定写入guardrailEvents表</text>
+
+  <rect x="540" y="1535" width="460" height="160" rx="10" fill="#0d1b2a" stroke="#00d2ff" stroke-width="1.5"/>
+  <text x="560" y="1560" font-size="16" fill="#00d2ff" font-weight="bold">两级缓存 (cache.ts)</text>
+  <line x1="560" y1="1570" x2="980" y2="1570" stroke="#333"/>
+  <text x="560" y="1594" font-size="13" fill="#ccc">L1 精确缓存: l1Key(tenantId, model, messages)</text>
+  <text x="560" y="1616" font-size="13" fill="#ccc">  命中 → 直接返回, cached=true, cache='L1-exact'</text>
+  <text x="560" y="1642" font-size="13" fill="#ccc">L2 语义缓存: semanticCacheGet(tenantId, query)</text>
+  <text x="560" y="1664" font-size="13" fill="#ccc">  相似度≥0.92 → 返回, TTL=24h</text>
+  <text x="560" y="1682" font-size="12" fill="#aaa">→ 响应后写回: l1Set + semanticCacheSet</text>
+
+  <rect x="1020" y="1535" width="440" height="160" rx="10" fill="#0d1b2a" stroke="#00d2ff" stroke-width="1.5"/>
+  <text x="1040" y="1560" font-size="16" fill="#00d2ff" font-weight="bold">LLM 调用链路 (llm.ts)</text>
+  <line x1="1040" y1="1570" x2="1440" y2="1570" stroke="#333"/>
+  <text x="1040" y="1594" font-size="13" fill="#ccc">• pickUpstream(task) → 按路由选主上游</text>
+  <text x="1040" y="1616" font-size="13" fill="#ccc">• chat(): 主上游重试2次 → 逐级fallback</text>
+  <text x="1040" y="1638" font-size="13" fill="#ccc">  返回 fallbackChain (记录尝试链路)</text>
+  <text x="1040" y="1660" font-size="13" fill="#ccc">• chatStream(): SSE流式, mock逐词生成</text>
+  <text x="1040" y="1682" font-size="12" fill="#aaa">→ mock提供者: 无Key时离线跑通全链路</text>
+
+  <rect x="60" y="1715" width="680" height="140" rx="10" fill="#0d1b2a" stroke="#b388ff" stroke-width="1.5"/>
+  <text x="80" y="1740" font-size="16" fill="#b388ff" font-weight="bold">PII 脱敏 + 提示词组装</text>
+  <line x1="80" y1="1750" x2="720" y2="1750" stroke="#333"/>
+  <text x="80" y="1774" font-size="13" fill="#ccc">redactPii(userQuery) → {redacted, mappings}</text>
+  <text x="80" y="1796" font-size="13" fill="#ccc">buildRagSystemPrompt({industry, tenantName, customPrompt, chunks})</text>
+  <text x="80" y="1818" font-size="13" fill="#ccc">  → 行业指令(medical/ecommerce/tech/general)</text>
+  <text x="80" y="1840" font-size="13" fill="#ccc">  → chunks: 【1】(doc#idx) text  |  无结果→"资料有限"</text>
+
+  <rect x="760" y="1715" width="700" height="140" rx="10" fill="#0d1b2a" stroke="#e94560" stroke-width="1.5"/>
+  <text x="780" y="1740" font-size="16" fill="#e94560" font-weight="bold">响应组装 + 审计落库</text>
+  <line x1="780" y1="1750" x2="1440" y2="1750" stroke="#333"/>
+  <text x="780" y="1774" font-size="13" fill="#ccc">• openAiResponse(): 标准OpenAI格式 + aics扩展字段</text>
+  <text x="780" y="1796" font-size="13" fill="#ccc">  trace_id / cached / status / guardrail / citations / fallback_chain</text>
+  <text x="780" y="1818" font-size="13" fill="#ccc">• 写入messages表 + recordUsage()→usageLogs表</text>
+  <text x="780" y="1840" font-size="13" fill="#ccc">• 流式: 首chunk带aics元数据, 逐段PII回填, [DONE]后写库</text>
+
+  <rect x="60" y="1875" width="680" height="120" rx="10" fill="#0d1b2a" stroke="#444" stroke-width="1.5"/>
+  <text x="80" y="1900" font-size="16" fill="#ffd700" font-weight="bold">流式响应 (stream=true)</text>
+  <text x="80" y="1924" font-size="13" fill="#ccc">1. chatStream() → 上游SSE ReadableStream</text>
+  <text x="80" y="1946" font-size="13" fill="#ccc">2. 首chunk: 带aics元数据(trace_id/citations)</text>
+  <text x="80" y="1968" font-size="13" fill="#ccc">3. 逐chunk: restorePii→scrubPiiOutput</text>
+  <text x="80" y="1986" font-size="12" fill="#aaa">4. [DONE]后: 写messages+usageLogs+semanticCache</text>
+
+  <rect x="760" y="1875" width="700" height="120" rx="10" fill="#0d1b2a" stroke="#444" stroke-width="1.5"/>
+  <text x="780" y="1900" font-size="16" fill="#ffd700" font-weight="bold">非流式响应 (stream=false)</text>
+  <text x="780" y="1924" font-size="13" fill="#ccc">1. chat() → 完整响应(含fallbackChain)</text>
+  <text x="780" y="1946" font-size="13" fill="#ccc">2. restorePii + scrubPiiOutput → finalContent</text>
+  <text x="780" y="1968" font-size="13" fill="#ccc">3. 写messages + usageLogs + l1Set + semanticCache</text>
+  <text x="780" y="1986" font-size="12" fill="#aaa">4. 返回openAiResponse(含citations/fallback_chain)</text>
+
+  <!-- 数据流向总览: 整体加高到400px -->
+  <rect x="30" y="2020" width="1460" height="400" rx="14" fill="#0d1b2a" stroke="#e94560" stroke-width="2"/>
+  <text x="760" y="2052" text-anchor="middle" font-size="20" fill="#e94560" font-weight="bold"> 数据流向总览</text>
+  <line x1="70" y1="2065" x2="1450" y2="2065" stroke="#333"/>
+
+  <!-- 输入源: 宽280, 高140 -->
+  <rect x="50" y="2085" width="280" height="140" rx="8" fill="#1a1a3e" stroke="#00d2ff" stroke-width="1.5"/>
+  <text x="190" y="2115" text-anchor="middle" font-size="16" fill="#00d2ff" font-weight="bold">输入源</text>
+  <text x="190" y="2142" text-anchor="middle" font-size="12" fill="#aaa">Web端 (React :17573)</text>
+  <text x="190" y="2164" text-anchor="middle" font-size="12" fill="#aaa">Admin端 (React :5174)</text>
+  <text x="190" y="2186" text-anchor="middle" font-size="12" fill="#aaa">API调用方</text>
+  <text x="190" y="2208" text-anchor="middle" font-size="11" fill="#666">统一网关Key鉴权</text>
+
+  <line x1="330" y1="2155" x2="370" y2="2155" stroke="#00d2ff" stroke-width="2" marker-end="url(#arrG)"/>
+
+  <!-- Gateway: 宽460, 长文本用11px -->
+  <rect x="370" y="2085" width="460" height="140" rx="8" fill="#1a1a3e" stroke="#e94560" stroke-width="2"/>
+  <text x="600" y="2115" text-anchor="middle" font-size="16" fill="#e94560" font-weight="bold">Gateway 网关 (:8787)</text>
+  <text x="600" y="2140" text-anchor="middle" font-size="11" fill="#ccc">auth → guardrail → cache → RAG → PII → LLM → response</text>
+  <text x="600" y="2162" text-anchor="middle" font-size="11" fill="#ccc">单租户模式 · 统一Key · 限流(rpm/tpm)</text>
+  <text x="600" y="2184" text-anchor="middle" font-size="12" fill="#ccc">Hono框架 · OpenAI兼容响应格式</text>
+  <text x="600" y="2206" text-anchor="middle" font-size="11" fill="#888">traceId全链路审计</text>
+
+  <line x1="830" y1="2155" x2="870" y2="2155" stroke="#e94560" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- 下游服务: 宽200 -->
+  <rect x="870" y="2085" width="200" height="140" rx="8" fill="#1a1a3e" stroke="#ffd700" stroke-width="1.5"/>
+  <text x="970" y="2115" text-anchor="middle" font-size="16" fill="#ffd700" font-weight="bold">下游服务</text>
+  <text x="970" y="2142" text-anchor="middle" font-size="12" fill="#aaa">Milvus (:19530)</text>
+  <text x="970" y="2164" text-anchor="middle" font-size="12" fill="#aaa">PostgreSQL (:5533)</text>
+  <text x="970" y="2186" text-anchor="middle" font-size="12" fill="#aaa">Ollama (:11434)</text>
+  <text x="970" y="2208" text-anchor="middle" font-size="12" fill="#aaa">上游LLM API</text>
+
+  <line x1="1070" y1="2155" x2="1110" y2="2155" stroke="#ffd700" stroke-width="2" marker-end="url(#arrY)"/>
+
+  <!-- 存储层: 宽340, 长文本用11px -->
+  <rect x="1110" y="2085" width="340" height="140" rx="8" fill="#1a1a3e" stroke="#b388ff" stroke-width="1.5"/>
+  <text x="1280" y="2115" text-anchor="middle" font-size="16" fill="#b388ff" font-weight="bold">存储层 (PostgreSQL)</text>
+  <text x="1280" y="2140" text-anchor="middle" font-size="11" fill="#aaa">conversations / messages</text>
+  <text x="1280" y="2160" text-anchor="middle" font-size="11" fill="#aaa">usageLogs / retrievalAudits</text>
+  <text x="1280" y="2180" text-anchor="middle" font-size="11" fill="#aaa">guardrailEvents / reviewQueue</text>
+  <text x="1280" y="2200" text-anchor="middle" font-size="11" fill="#aaa">tenants / api_keys</text>
+
+  <!-- 核心特性: 移到y=2250起 -->
+  <text x="760" y="2260" text-anchor="middle" font-size="14" fill="#888">核心特性: 混合检索(Dense+BM25/RRF) · 两级缓存(L1精确+L2语义) · 三态护栏(allow/confirm/block)</text>
+  <text x="760" y="2284" text-anchor="middle" font-size="14" fill="#888">PII脱敏回填 · LLM路由+重试+Fallback · 审计全链路(traceId串联) · 单租户简化架构</text>
+  <text x="760" y="2308" text-anchor="middle" font-size="14" fill="#888">Milvus状态机+熔断 · Zod参数校验 · 降级策略(sparse→dense, remote→mock embedding)</text>
+  <text x="760" y="2336" text-anchor="middle" font-size="13" fill="#555">代码位置: apps/gateway/src/{chat.ts, rag/index.ts, clients/{milvus,llm}.ts, config.ts}</text>
+
+  <!-- 图例: 移到y=2360起 -->
+  <rect x="70" y="2360" width="16" height="16" rx="3" fill="#00d2ff"/>
+  <text x="92" y="2374" font-size="12" fill="#aaa">Dense通道</text>
+  <rect x="200" y="2360" width="16" height="16" rx="3" fill="#ffd700"/>
+  <text x="222" y="2374" font-size="12" fill="#aaa">Sparse通道</text>
+  <rect x="350" y="2360" width="16" height="16" rx="3" fill="#e94560"/>
+  <text x="372" y="2374" font-size="12" fill="#aaa">RRF融合</text>
+  <rect x="490" y="2360" width="16" height="16" rx="3" fill="#00d2ff"/>
+  <text x="512" y="2374" font-size="12" fill="#aaa">Cache</text>
+  <rect x="600" y="2360" width="16" height="16" rx="3" fill="#ffd700"/>
+  <text x="622" y="2374" font-size="12" fill="#aaa">Guardrail</text>
+  <rect x="750" y="2360" width="16" height="16" rx="3" fill="#b388ff"/>
+  <text x="772" y="2374" font-size="12" fill="#aaa">PII脱敏</text>
+  <rect x="890" y="2360" width="16" height="16" rx="3" fill="#e94560"/>
+  <text x="912" y="2374" font-size="12" fill="#aaa">LLM推理</text>
+  <rect x="1040" y="2360" width="16" height="16" rx="3" fill="#888"/>
+  <text x="1062" y="2374" font-size="12" fill="#aaa">审计/存储</text>
+</svg>

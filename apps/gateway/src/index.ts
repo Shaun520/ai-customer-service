@@ -14,6 +14,7 @@ import { adminRoutes } from './routes/admin.js';
 import { reviewRoutes } from './routes/reviews.js';
 import { traceRoutes } from './routes/trace.js';
 import { milvusState, onMilvusStateChange } from './clients/milvus.js';
+import { loadProviders } from './llm-store.js';
 
 const app = new Hono();
 
@@ -45,8 +46,16 @@ app.onError((err, c) => {
 // Milvus 状态机日志
 onMilvusStateChange((s, prev) => console.log(`[milvus] state: ${prev} → ${s}`));
 
-serve({ fetch: app.fetch, port: config.port }, (info) => {
+serve({ fetch: app.fetch, port: config.port }, async (info) => {
   console.log(`[gateway] AICS AI 智能客服网关已启动: http://localhost:${info.port}`);
   console.log(`[gateway] OpenAI 兼容端点: http://localhost:${info.port}/v1/chat/completions`);
+  try {
+    const providers = await loadProviders();
+    console.log(
+      `[gateway] 模型提供商会话载入: ${providers.length} 个（来源: ${providers.some((p) => p.id > 0) ? 'DB' : 'env 兜底'}） → ${providers.map((p) => p.name).join(', ')}`,
+    );
+  } catch (err) {
+    console.warn('[gateway] 载入模型提供商会话失败（将使用 env 兜底）:', (err as Error).message);
+  }
   console.log(`[gateway] Milvus 状态: ${milvusState()}`);
 });

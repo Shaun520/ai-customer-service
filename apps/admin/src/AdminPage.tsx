@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '@aics/shared/web';
 import {
-  admin, knowledge, reviews, trace as traceApi,
+  admin, knowledge, reviews, trace as traceApi, models as modelsApi,
   GATEWAY_KEY_STORAGE, DEFAULT_GATEWAY_KEY,
-  type UsageResponse, type KbPreviewHit,
+  type UsageResponse, type KbPreviewHit, type ModelProviderRow, type ModelProviderInput,
 } from './api';
 
-type Tab = 'usage' | 'kb' | 'reviews' | 'trace';
+type Tab = 'usage' | 'kb' | 'reviews' | 'trace' | 'models';
 
 const DEFAULT_ADMIN_TOKEN = 'change-me-admin-token';
 
@@ -19,6 +19,7 @@ interface ReviewRow {
 const NAV: Array<{ key: Tab; icon: string; label: string }> = [
   { key: 'usage', icon: 'chart', label: '用量统计' },
   { key: 'kb', icon: 'book', label: '知识库' },
+  { key: 'models', icon: 'database', label: '模型配置' },
   { key: 'reviews', icon: 'clipboard', label: '人工审核' },
   { key: 'trace', icon: 'search', label: '全链路追踪' },
 ];
@@ -91,6 +92,7 @@ export default function AdminPage({ goChat }: { goChat: () => void }) {
 
           {tab === 'usage' && <UsageTab />}
           {tab === 'kb' && <KbTab notify={notify} />}
+          {tab === 'models' && <ModelsTab notify={notify} />}
           {tab === 'reviews' && <ReviewsTab notify={notify} />}
           {tab === 'trace' && <TraceTab notify={notify} />}
         </div>
@@ -360,6 +362,187 @@ function KbTab({ notify }: { notify: Notify }) {
               </div>
             )}
           </div>
+        )}
+        {err && <div className="err">{err}</div>}
+      </div>
+    </>
+  );
+}
+
+function ModelsTab({ notify }: { notify: Notify }) {
+  // 表单状态：editing=null 表示新增；否则为编辑对象的备份
+  const [rows, setRows] = useState<ModelProviderRow[]>([]);
+  const [edit, setEdit] = useState<ModelProviderRow | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [form, setForm] = useState<ModelProviderInput>({
+    name: '', baseUrl: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat',
+    enabled: true, isDefault: false, task: 'default',
+  });
+
+  const load = async () => {
+    setErr('');
+    try { setRows(((await modelsApi.list()).providers ?? [])); }
+    catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const startCreate = () => {
+    setEdit(null);
+    setForm({ name: '', baseUrl: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', enabled: true, isDefault: !rows.some((r) => r.isDefault), task: 'default' });
+  };
+  const startEdit = (r: ModelProviderRow) => {
+    if (r.source === 'env') { setErr('环境变量来源的提供商不支持编辑，请先新增一条 DB 配置'); return; }
+    setErr('');
+    setEdit(r);
+    setForm({ name: r.name, baseUrl: r.baseUrl, apiKey: '', model: r.model, enabled: r.enabled, isDefault: r.isDefault, task: r.task });
+  };
+
+  const patch = (k: keyof ModelProviderInput, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
+
+  const submit = async () => {
+    if (!form.name.trim() || !form.baseUrl.trim() || !form.model.trim()) {
+      setErr('请填写名称、Base URL 与模型'); return;
+    }
+    if (!edit && !form.apiKey.trim()) { setErr('新增时请填写 API Key'); return; }
+    setErr(''); setBusy(true);
+    try {
+      const payload = {
+        ...form,
+        name: form.name.trim(),
+        baseUrl: form.baseUrl.trim(),
+        model: form.model.trim(),
+        // 保留原 apiKey：编辑时输入框留空表示不改动
+        apiKey: form.apiKey.trim() || (edit?.apiKey ?? ''),
+      };
+      if (edit) {
+        await modelsApi.update(edit.id, payload);
+        notify('ok', `提供商「${payload.name}」已更新并实时生效`);
+      } else {
+        await modelsApi.create(payload);
+        notify('ok', `提供商「${payload.name}」已新增并实时生效`);
+      }
+      setEdit(null); startCreate();
+      await load();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  const toggleEnabled = async (r: ModelProviderRow) => {
+    setErr('');
+    try {
+      await modelsApi.update(r.id, {
+        name: r.name, baseUrl: r.baseUrl, model: r.model,
+        apiKey: r.apiKey, enabled: !r.enabled, isDefault: r.isDefault, task: r.task,
+      });
+      notify('ok', `${r.name} 已${r.enabled ? '停用' : '启用'}`);
+      await load();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+  };
+
+  const setDefault = async (r: ModelProviderRow) => {
+    setErr('');
+    try {
+      await modelsApi.update(r.id, {
+        name: r.name, baseUrl: r.baseUrl, model: r.model,
+        apiKey: r.apiKey, enabled: r.enabled, isDefault: true, task: r.task,
+      });
+      notify('ok', `${r.name} 已设为默认模型`);
+      await load();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+  };
+
+  const remove = async (r: ModelProviderRow) => {
+    if (r.source === 'env') { setErr('环境变量来源的提供商无法删除'); return; }
+    if (!window.confirm(`确认删除模型提供商「${r.name}」？网关将立即停止使用该配置。`)) return;
+    setErr('');
+    try {
+      await modelsApi.remove(r.id);
+      notify('ok', `提供商「${r.name}」已删除`);
+      if (edit?.id === r.id) { setEdit(null); startCreate(); }
+      await load();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+  };
+
+  return (
+    <>
+      <div className="card">
+        <div className="h2">{edit ? `编辑提供商：${edit.name}` : '新增对话模型提供商'}</div>
+        <p className="sub">配置网关实际调用的对话模型。DB 配置优先，保存后立即生效（无需重启网关）；未配置时自动回退到环境变量 LLM_UPSTREAMS。</p>
+        <div className="models-grid">
+          <div>
+            <label>名称（唯一，如 deepseek）</label>
+            <input value={form.name} onChange={(e) => patch('name', e.target.value)} placeholder="deepseek" disabled={!!edit} />
+          </div>
+          <div>
+            <label>模型</label>
+            <input value={form.model} onChange={(e) => patch('model', e.target.value)} placeholder="deepseek-chat" />
+          </div>
+          <div className="models-span">
+            <label>Base URL</label>
+            <input value={form.baseUrl} onChange={(e) => patch('baseUrl', e.target.value)} placeholder="https://api.deepseek.com/v1" className="mono" />
+          </div>
+          <div className="models-span">
+            <label>API Key {edit && <span className="muted">（留空则保持不变）</span>}</label>
+            <input type="password" value={form.apiKey} onChange={(e) => patch('apiKey', e.target.value)} placeholder={edit ? '•••••••（保持不变）' : 'sk-…'} className="mono" />
+          </div>
+          <div>
+            <label>路由任务</label>
+            <select value={form.task} onChange={(e) => patch('task', e.target.value)}>
+              <option value="default">default（通用）</option>
+              <option value="review">review（审核）</option>
+            </select>
+          </div>
+        </div>
+        <div className="models-checks">
+          <label className="check"><input type="checkbox" checked={form.enabled} onChange={(e) => patch('enabled', e.target.checked)} /> 启用</label>
+          <label className="check"><input type="checkbox" checked={form.isDefault} onChange={(e) => patch('isDefault', e.target.checked)} /> 设为默认（无路由匹配时兜底）</label>
+        </div>
+        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button className="ghost" onClick={() => { setEdit(null); startCreate(); }}>重置</button>
+          <button onClick={submit} disabled={busy}>{busy ? '保存中…' : (edit ? '保存修改' : '新增提供商')}</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <div className="h2">已配置提供商（{rows.length}）</div>
+          <button className="ghost" onClick={load} disabled={busy}>{busy ? '刷新中…' : '刷新'}</button>
+        </div>
+        {rows.length === 0 && !busy && <div className="muted">暂无配置，回退到环境变量 LLM_UPSTREAMS 运行。</div>}
+        {rows.length > 0 && (
+          <div className="table-wrap"><table>
+            <thead><tr>
+              <th>名称</th><th>模型</th><th>Base URL</th><th>API Key</th>
+              <th>任务</th><th>状态</th><th className="actions">操作</th>
+            </tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    {r.name}
+                    {r.isDefault && <span className="badge meta" style={{ marginLeft: 6 }}>默认</span>}
+                    {r.source === 'env' && <span className="badge meta" style={{ marginLeft: 6, opacity: 0.6 }}>env</span>}
+                  </td>
+                  <td className="mono" style={{ fontSize: 12 }}>{r.model}</td>
+                  <td className="mono" style={{ fontSize: 12 }}>{r.baseUrl}</td>
+                  <td className="mono" style={{ fontSize: 12 }}>{r.apiKey}</td>
+                  <td>{r.task}</td>
+                  <td>{r.enabled ? <span className="badge ok" style={{ color: 'var(--ok)' }}>启用</span> : <span className="badge" style={{ color: 'var(--muted)' }}>停用</span>}</td>
+                  <td className="actions">
+                    {r.source === 'db' && !r.isDefault && (
+                      <button className="ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setDefault(r)}>设默认</button>
+                    )}
+                    <button className="ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => toggleEnabled(r)}>
+                      {r.enabled ? '停用' : '启用'}
+                    </button>
+                    <button className="ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => startEdit(r)}>编辑</button>
+                    <button className="ghost" style={{ padding: '4px 10px', fontSize: 12, color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.3)' }} onClick={() => remove(r)}>删除</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
         )}
         {err && <div className="err">{err}</div>}
       </div>
