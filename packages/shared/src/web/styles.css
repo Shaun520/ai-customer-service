@@ -270,6 +270,13 @@ tbody tr:hover { background: var(--panel-2); }
 }
 .notice-banner.error { background: var(--danger-soft); color: var(--danger); border-color: rgba(220, 38, 38, 0.25); }
 
+/* 模型配置模块 */
+.models-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 16px; }
+.models-grid .models-span { grid-column: 1 / -1; }
+.models-checks { display: flex; gap: 24px; margin-top: 14px; }
+.models-checks .check { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 500; color: var(--muted); }
+.models-checks .check input { width: auto; }
+
 @media (max-width: 720px) {
   .admin-side { flex-basis: 64px; padding: 14px 8px; }
   .admin-side .brand span, .admin-nav button .label, .admin-side .side-foot { display: none; }

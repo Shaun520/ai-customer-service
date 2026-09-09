@@ -1,5 +1,5 @@
 // Lucide 风格线性图标（24x24 stroke），避免使用 emoji 作为图标
-type IconName = 'message' | 'bot' | 'user' | 'settings' | 'building' | 'book' | 'clipboard' | 'search' | 'send' | 'x' | 'copy' | 'check' | 'arrow-left' | 'clip' | 'chart' | 'trash' | 'activity' | 'log-in' | 'log-out' | 'zap' | 'gauge';
+type IconName = 'message' | 'bot' | 'user' | 'settings' | 'building' | 'book' | 'clipboard' | 'search' | 'send' | 'x' | 'copy' | 'check' | 'arrow-left' | 'clip' | 'chart' | 'trash' | 'activity' | 'log-in' | 'log-out' | 'zap' | 'gauge' | 'database';
 
 const PATHS: Record<string, JSX.Element> = {
   message: <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />,
@@ -101,6 +101,13 @@ const PATHS: Record<string, JSX.Element> = {
     <>
       <path d="m12 14 4-4" />
       <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+    </>
+  ),
+  database: (
+    <>
+      <ellipse cx="12" cy="5" rx="9" ry="3" />
+      <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+      <path d="M3 12A9 3 0 0 0 21 12" />
     </>
   ),
 };

@@ -5,6 +5,7 @@
  * - 内置 mock 提供者：无外部 Key 时可离线跑通全链路
  */
 import { config, isMockUpstream, type LlmUpstream } from '../config.js';
+import { pickProvider } from '../llm-store.js';
 import { createHmac } from 'node:crypto';
 
 export interface ChatResult {
@@ -48,14 +49,15 @@ export function upstreamAuthHeader(upstream: LlmUpstream): string {
   return `Bearer ${token}`;
 }
 
-/** 按任务名选上游：LLM_MODEL_ROUTING[task]，缺省第一个 */
+/** 按任务名选上游：优先运行时 store（DB 配置），其次 LLM_MODEL_ROUTING 路由，缺省进入 store 兜底 */
 export function pickUpstream(task = 'default'): LlmUpstream {
   const routed = config.modelRouting[task];
   if (routed) {
-    const found = config.llmUpstreams.find((u) => u.name === routed);
-    if (found) return found;
+    const p = pickProvider(task);
+    // store 已按 task 匹配，若路由名一致则直接采用；否则仍以 store 结果为准
+    if (p.name === routed) return p;
   }
-  return config.llmUpstreams[0];
+  return pickProvider(task);
 }
 
 // ---------------- mock 提供者 ----------------

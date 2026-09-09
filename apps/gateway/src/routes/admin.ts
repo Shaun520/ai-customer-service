@@ -5,12 +5,13 @@
  * 全局 GATEWAY_API_KEY，见 gateway/auth.ts。
  */
 import { Hono } from 'hono';
-import { and, eq } from 'drizzle-orm';
-import { IndustryRulePackSchema } from '@aics/shared';
+import { and, eq, ne } from 'drizzle-orm';
+import { IndustryRulePackSchema, ModelProviderInputSchema } from '@aics/shared';
 import { db, queryClient } from '../db/index.js';
-import { industryRules } from '../db/schema.js';
+import { industryRules, modelProviders } from '../db/schema.js';
 import { adminAuth } from '../gateway/auth.js';
 import { DEFAULT_RULE_PACKS, clearRuleCache } from '../gateway/guardrail.js';
+import { clearDefaults, getProviders, reloadProviders, type StoredProvider } from '../llm-store.js';
 
 export const adminRoutes = new Hono();
 
@@ -171,4 +172,142 @@ adminRoutes.get('/usage', async (c) => {
       avgLatencyMs: Number(summary['avg_latency_ms'] ?? 0),
     },
   });
+});
+
+// ---------- 对话模型提供商配置（热更新，DB 优先/env 兜底） ----------
+
+/** 脱敏 apiKey：sk-***last4，用于列表/详情返回 */
+function maskApiKey(raw: string): string {
+  if (raw.length <= 4) return '****';
+  return `***${raw.slice(-4)}`;
+}
+
+/** 归一化行结构，isDefault 按 task 全局唯一化 */
+function toRow(p: StoredProvider) {
+  return {
+    id: p.id,
+    name: p.name,
+    baseUrl: p.baseUrl,
+    apiKey: p.id < 0 ? p.apiKey : maskApiKey(p.apiKey), // env 来源返回明文(本地 mock)，DB 来源脱敏
+    model: p.model,
+    enabled: p.enabled,
+    isDefault: p.isDefault,
+    task: p.task,
+    source: p.id < 0 ? 'env' : 'db',
+  };
+}
+
+/** 列出当前运行的模型提供商（DB + env 兜底），按 id 升序 */
+adminRoutes.get('/models', async (c) => {
+  const list = getProviders();
+  return c.json({ providers: list.map(toRow), count: list.length });
+});
+
+/** 新增模型提供商（Zod 校验；name 唯一；置默认时清理同 task 的其他默认） */
+adminRoutes.post('/models', async (c) => {
+  const parsed = ModelProviderInputSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid model provider', detail: parsed.error.flatten() }, 400);
+  }
+  const body = parsed.data;
+
+  const exist = await db
+    .select({ id: modelProviders.id })
+    .from(modelProviders)
+    .where(eq(modelProviders.name, body.name))
+    .limit(1);
+  if (exist[0]) {
+    return c.json({ error: `Provider "${body.name}" already exists` }, 409);
+  }
+
+  if (body.isDefault) await clearDefaults();
+
+  const inserted = await db
+    .insert(modelProviders)
+    .values({
+      name: body.name,
+      baseUrl: body.baseUrl,
+      apiKey: body.apiKey,
+      model: body.model,
+      enabled: body.enabled ?? true,
+      isDefault: body.isDefault ?? false,
+      task: body.task ?? 'default',
+    })
+    .returning({ id: modelProviders.id, name: modelProviders.name });
+
+  await reloadProviders();
+  return c.json({
+    provider: inserted[0],
+    updated: true,
+    note: '模型提供商已新增并实时生效（无需重启网关）',
+  });
+});
+
+/** 更新模型提供商（可改 baseUrl/apiKey/model/enabled/isDefault/task/name），改后热加载 */
+adminRoutes.put('/models/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id <= 0) return c.json({ error: 'Invalid provider id' }, 400);
+
+  const parsed = ModelProviderInputSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid model provider', detail: parsed.error.flatten() }, 400);
+  }
+  const body = parsed.data;
+
+  const rows = await db.select().from(modelProviders).where(eq(modelProviders.id, id)).limit(1);
+  if (!rows[0]) return c.json({ error: 'Provider not found' }, 404);
+
+  // name 冲突检查（排除自身：同 name 但不同 id）
+  if (body.name !== rows[0].name) {
+    const dup = await db
+      .select({ id: modelProviders.id })
+      .from(modelProviders)
+      .where(and(eq(modelProviders.name, body.name), ne(modelProviders.id, id)))
+      .limit(1);
+    if (dup[0]) {
+      return c.json({ error: `Provider name "${body.name}" already exists` }, 409);
+    }
+  }
+
+  if (body.isDefault) await clearDefaults();
+
+  // apiKey 若是脱敏态(***last4)或为空，则保留库中原值；仅当提交了真实新 key 时才覆盖
+  const nextApiKey = !body.apiKey.trim() || body.apiKey.startsWith('***')
+    ? rows[0].apiKey
+    : body.apiKey;
+
+  const updated = await db
+    .update(modelProviders)
+    .set({
+      name: body.name,
+      baseUrl: body.baseUrl,
+      apiKey: nextApiKey,
+      model: body.model,
+      enabled: body.enabled ?? true,
+      isDefault: body.isDefault ?? false,
+      task: body.task ?? 'default',
+      updatedAt: new Date(),
+    })
+    .where(eq(modelProviders.id, id))
+    .returning({ id: modelProviders.id, name: modelProviders.name });
+
+  await reloadProviders();
+  return c.json({
+    provider: updated[0],
+    updated: true,
+    note: '模型提供商已更新并实时生效（无需重启网关）',
+  });
+});
+
+/** 删除模型提供商（删除后热加载；若删除导致 store 空则回退到 env 默认） */
+adminRoutes.delete('/models/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id <= 0) return c.json({ error: 'Invalid provider id' }, 400);
+
+  const rows = await db.select().from(modelProviders).where(eq(modelProviders.id, id)).limit(1);
+  if (!rows[0]) return c.json({ error: 'Provider not found' }, 404);
+
+  await db.delete(modelProviders).where(eq(modelProviders.id, id));
+  await reloadProviders();
+  return c.json({ deleted: id, updated: true, note: '模型提供商已删除并实时生效' });
 });

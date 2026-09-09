@@ -13,6 +13,31 @@ import {
   index,
 } from 'drizzle-orm/pg-core';
 
+/**
+ * 对话 LLM 提供商（Admin 可运行时配置）
+ * 对应运行时配置 LLM_UPSTREAMS 的可视化/持久化管理；DB 有数据则优先，空则回退 env。
+ */
+export const modelProviders = pgTable(
+  'model_providers',
+  {
+    id: serial('id').primaryKey(),
+    /** 提供商 key，如 "deepseek"（唯一，等价 env 的 LlmUpstream.name) */
+    name: varchar('name', { length: 64 }).notNull().unique(),
+    baseUrl: varchar('base_url', { length: 512 }).notNull(),
+    apiKey: varchar('api_key', { length: 512 }).notNull(),
+    /** 上游模型，如 "deepseek-chat" */
+    model: varchar('model', { length: 128 }).notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    /** 无路由匹配时的兜底提供商（唯一） */
+    isDefault: boolean('is_default').notNull().default(false),
+    /** 路由任务：default|review 等（对应 pickUpstream 的 task） */
+    task: varchar('task', { length: 32 }).notNull().default('default'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('model_providers_name_idx').on(t.name)],
+);
+
 export const tenants = pgTable('tenants', {
   id: serial('id').primaryKey(),
   slug: varchar('slug', { length: 64 }).notNull().unique(),
