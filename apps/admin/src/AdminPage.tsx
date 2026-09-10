@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '@aics/shared/web';
 import {
-  admin, knowledge, reviews, trace as traceApi, models as modelsApi,
+  admin, knowledge, reviews, trace as traceApi, models as modelsApi, files as filesApi,
   GATEWAY_KEY_STORAGE, DEFAULT_GATEWAY_KEY,
-  type UsageResponse, type KbPreviewHit, type ModelProviderRow, type ModelProviderInput,
+  type UsageResponse, type KbPreviewHit, type ModelProviderRow, type ModelProviderInput, type ManagedFile,
 } from './api';
 
 type Tab = 'usage' | 'kb' | 'reviews' | 'trace' | 'models';
@@ -238,6 +238,64 @@ function KbTab({ notify }: { notify: Notify }) {
   const [preview, setPreview] = useState<{ hits: KbPreviewHit[]; hint: string; doc: KbDoc } | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
 
+  // 文件上传（COS 私有桶留档 + 文本直读 txt/md 供入库）
+  const [fileBusy, setFileBusy] = useState(false);
+  const [lastUpload, setLastUpload] = useState<{ name: string; /* url is signed per-request */ size: number } | null>(null);
+  // 已上传文件（upload_files 记录，可用于预览原始文件）
+  const [files, setFiles] = useState<ManagedFile[]>([]);
+
+  const loadFiles = async () => {
+    try {
+      const r = await filesApi.list();
+      setFiles(r.files);
+    } catch { /* 文件服务异常不阻塞文档区 */ }
+  };
+  useEffect(() => { loadFiles(); /* eslint-disable-next-line */ }, []);
+
+  const viewFile = async (id: number) => {
+    try {
+      const r = await filesApi.view(id);
+      window.open(r.url, '_blank'); // inline 签名 URL：网关生成，浏览器新标签预览而非下载
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+  };
+
+  // 按入库文档名匹配已上传的原始文件（忽略扩展名差异），用于在线预览原文件
+  const previewDoc = (doc: KbDoc) => {
+    const match = files.find((f) => {
+      const dot = f.name.lastIndexOf('.');
+      const stem = dot > 0 ? f.name.slice(0, dot) : f.name;
+      return stem === doc.name || f.name === doc.name;
+    });
+    if (match) { viewFile(match.id); return; }
+    // 找不到原始文件则退化为文档内容预览（检索预览角度）
+    setErr('未找到该文档的原始文件，已展开检索预览');
+    toggleOpen(doc);
+  };
+
+  const handleFile = async (f: File | undefined) => {
+    if (!f) return;
+    setErr('');
+    const ext = f.name.split('.').pop()?.toLowerCase();
+    const texty = ['txt', 'md', 'markdown', 'csv', 'json'].includes(ext ?? '');
+    // 所有文件都上传到 COS 私有桶，并写入 upload_files 元数据
+    setFileBusy(true);
+    try {
+      const r = await filesApi.upload(f, texty ? 'kb/docs' : 'kb/files');
+      setLastUpload({ name: r.file.name, size: r.file.size });
+      await loadFiles();
+      // 文本文件额外读取内容填入表单，便于提交入库（RAG）
+      if (texty) {
+        const content = await f.text();
+        setName(f.name.replace(/\.(txt|md|markdown|csv|json)$/i, ''));
+        setText(content);
+        notify('ok', `「${r.file.name}」已上传至 COS 私有桶，内容已读取，可直接入库或编辑后提交`);
+      } else {
+        notify('ok', `「${r.file.name}」已上传至 COS 私有桶并记录`);
+      }
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setFileBusy(false); }
+  };
+
   const loadDocs = async () => {
     if (!apiKey.trim()) { setErr('请填写网关 API Key'); return; }
     setErr(''); setBusy(true);
@@ -298,6 +356,17 @@ function KbTab({ notify }: { notify: Notify }) {
         <div className="h2">上传文档</div>
         <label>网关 API Key（统一 Key，所有接入端共用）</label>
         <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="GATEWAY_API_KEY" className="mono" />
+        <input
+          type="file"
+          disabled={fileBusy}
+          onChange={(e) => { handleFile(e.target.files?.[0]); e.target.value = ''; }}
+        />
+        {fileBusy && <div className="muted" style={{ marginTop: 8 }}>正在上传到 COS 私有桶…</div>}
+        {lastUpload && (
+          <div className="muted" style={{ marginTop: 8 }}>
+            已上传：{lastUpload.name}（{(lastUpload.size / 1024).toFixed(1)} KB）—— 见下方「已上传文件」列表，可在线预览。
+          </div>
+        )}
         <label>文档名</label>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="门诊须知" />
         <label>文档内容</label>
@@ -318,14 +387,15 @@ function KbTab({ notify }: { notify: Notify }) {
               {docs.map((d) => (
                 <tr key={d.id}>
                   <td>{d.id}</td><td>{d.name}</td><td>{d.chunk_count}</td>
-                  <td className="actions">
-                    <button className="ghost" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => toggleOpen(d)}>
-                      {open === d.id ? '收起' : '检索预览'}
-                    </button>
-                    <button className="ghost" style={{ padding: '4px 12px', fontSize: 12, color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.3)' }} onClick={() => remove(d)}>
-                      <Icon name="trash" size={13} /> 删除
-                    </button>
-                  </td>
+                        <td className="actions">
+                            <button className="ghost" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => previewDoc(d)} title="下载该文档的原始上传文件">下载</button>
+                            <button className="ghost" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => toggleOpen(d)}>
+                                {open === d.id ? '收起' : '检索预览'}
+                            </button>
+                            <button className="ghost" style={{ padding: '4px 12px', fontSize: 12, color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.3)' }} onClick={() => remove(d)}>
+                                <Icon name="trash" size={13} /> 删除
+                            </button>
+                        </td>
                 </tr>
               ))}
             </tbody>

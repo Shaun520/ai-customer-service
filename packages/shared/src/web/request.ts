@@ -9,14 +9,17 @@ export async function request<T = unknown>(
   options: { method?: string; body?: unknown; auth?: 'admin' | 'bearer'; token?: string } = {},
 ): Promise<T> {
   const { method = 'GET', body, auth, token } = options;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // FormData 时由浏览器自动设置 multipart 边界，不手动加 Content-Type，也不 JSON.stringify
+  const isForm = body instanceof FormData;
+  const headers: Record<string, string> = {};
+  if (!isForm) headers['Content-Type'] = 'application/json';
   if (auth === 'admin') headers['X-Admin-Token'] = token ?? localStorage.getItem('aics_admin_token') ?? DEFAULT_ADMIN_TOKEN;
   if (auth === 'bearer' && token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`/v1${path}`, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: isForm ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
     const err = await res.text().catch(() => '');

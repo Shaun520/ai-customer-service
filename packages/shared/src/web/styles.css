@@ -286,3 +286,20 @@ tbody tr:hover { background: var(--panel-2); }
   .suggestions { grid-template-columns: 1fr; }
   .bubble { max-width: 88%; }
 }
+
+/* 文件管理模块（COS 私有桶 + 签名 URL 预览） */
+.error-text { color: var(--danger); font-size: 13px; }
+button.ghost.danger { color: var(--danger); }
+button.ghost.danger:hover { background: var(--danger-soft); border-color: rgba(220, 38, 38, 0.4); }
+.file-table { display: flex; flex-direction: column; margin-top: 8px; }
+.file-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius); margin-top: 8px;
+  background: var(--panel-2);
+}
+.file-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.file-name { cursor: pointer; color: var(--accent); font-weight: 500; letter-spacing: 0.2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-name:hover { text-decoration: underline; }
+.file-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.file-actions button { padding: 6px 12px; font-size: 12px; }
