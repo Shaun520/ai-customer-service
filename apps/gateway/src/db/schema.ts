@@ -212,3 +212,25 @@ export const usageLogs = pgTable(
   },
   (t) => [index('usage_logs_tenant_idx').on(t.tenantId, t.createdAt)],
 );
+
+/**
+ * 文件管理：上传到 COS 私有桶的记录（文件名/对象路径/大小/类型/上传者/时间）
+ * 实际文件存于私有桶，前端通过网关生成的签名 URL 临时访问（inline 预览，非下载）。
+ */
+export const uploadFiles = pgTable(
+  'upload_files',
+  {
+    id: serial('id').primaryKey(),
+    /** 原始上传文件名 */
+    name: varchar('name', { length: 256 }).notNull(),
+    /** COS 对象路径（目录/文件名），如 kb/2026-09-10/xxx.png */
+    objectKey: varchar('object_key', { length: 512 }).notNull(),
+    /** COS 存储桶短名，如 7374-study-... */
+    bucket: varchar('bucket', { length: 256 }).notNull(),
+    size: integer('size').notNull().default(0),
+    /** 文件 MIME 类型 */
+    mimeType: varchar('mime_type', { length: 128 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('upload_files_created_idx').on(t.createdAt)],
+);

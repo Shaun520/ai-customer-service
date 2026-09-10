@@ -49,6 +49,27 @@ export const config = {
     dim: Number(process.env.EMBEDDING_DIM ?? 1024),
   },
 
+  /** 腾讯云 CloudBase 文件上传（网关后端中转） */
+  cloudbase: {
+    envId: process.env.TCB_ENV_ID ?? '',
+    secretId: process.env.TCB_SECRET_ID ?? '',
+    secretKey: process.env.TCB_SECRET_KEY ?? '',
+    region: process.env.TCB_REGION ?? 'ap-shanghai',
+    /** 上传后的可公开访问域名前缀（云存储默认 CDN 域名，实测后替换） */
+    publicDomain: process.env.TCB_PUBLIC_DOMAIN ?? '',
+    enabled: (process.env.TCB_ENABLED ?? 'false') === 'true',
+  },
+
+  /** 腾讯云 COS 私有桶文件存储（文件管理模块用）：上传对象 + 签名 URL 预览 */
+  cosStorage: {
+    secretId: process.env.COS_SECRET_ID ?? '',
+    secretKey: process.env.COS_SECRET_KEY ?? '',
+    region: process.env.COS_REGION ?? 'ap-shanghai',
+    /** COS 存储桶完整名（含 -appid），如 7374-study-...-1349800710 */
+    bucket: process.env.COS_BUCKET ?? '',
+    enabled: (process.env.COS_ENABLED ?? 'false') === 'true',
+  },
+
   semanticCache: {
     enabled: (process.env.SEMANTIC_CACHE_ENABLED ?? 'true') === 'true',
     threshold: Number(process.env.SEMANTIC_CACHE_THRESHOLD ?? 0.92),

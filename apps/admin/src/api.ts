@@ -122,3 +122,56 @@ export const models = {
       auth: 'admin',
     }),
 };
+
+// ---------- 文件上传（网关中转 → 腾讯云 CloudBase）----------
+
+export interface UploadResult {
+  fileID: string;
+  url: string;
+  cloudPath: string;
+  name: string;
+  size: number;
+  type?: string;
+}
+
+/** 上传文件到 CloudBase；dir 指定云存储目录前缀（默认 kb） */
+export const upload = {
+  file: (file: File, dir = 'kb') => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('path', dir);
+    return request<UploadResult>('/admin/upload', { method: 'POST', body: fd, auth: 'admin' });
+  },
+};
+
+// ---------- 文件管理（COS 私有桶 + 签名 URL 预览）----------
+
+export interface ManagedFile {
+  id: number;
+  name: string;
+  objectKey: string;
+  bucket: string;
+  size: number;
+  mimeType: string | null;
+  createdAt: string;
+}
+
+export interface FileViewResult {
+  fileID: number;
+  name: string;
+  url: string; // 签名临时 URL（inline 预览）
+  expiresAt: number;
+}
+
+export const files = {
+  list: () => request<{ files: ManagedFile[] }>('/admin/files', { auth: 'admin' }),
+  upload: (file: File, dir = 'files') => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('dir', dir);
+    return request<{ file: ManagedFile; note: string }>('/admin/files', { method: 'POST', body: fd, auth: 'admin' });
+  },
+  /** 获取某文件的签名预览 URL（点击时实时生成，有效期 2 小时） */
+  view: (id: number) => request<FileViewResult>(`/admin/files/${id}/view`, { auth: 'admin' }),
+  remove: (id: number) => request<{ deleted: number }>(`/admin/files/${id}`, { method: 'DELETE', auth: 'admin' }),
+};

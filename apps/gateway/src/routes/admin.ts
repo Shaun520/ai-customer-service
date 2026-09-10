@@ -1,17 +1,20 @@
 /**
- * 管理接口（X-Admin-Token 鉴权）：规则包热更新、用量统计、文档检索预览
+ * 管理接口（X-Admin-Token 鉴权）：规则包热更新、用量统计、文档检索预览、文件上传
  *
  * 单租户模式：不再提供"创建租户 / 签发 API Key"，接入端统一使用
  * 全局 GATEWAY_API_KEY，见 gateway/auth.ts。
  */
 import { Hono } from 'hono';
+import { randomUUID } from 'node:crypto';
 import { and, eq, ne } from 'drizzle-orm';
 import { IndustryRulePackSchema, ModelProviderInputSchema } from '@aics/shared';
 import { db, queryClient } from '../db/index.js';
-import { industryRules, modelProviders } from '../db/schema.js';
+import { industryRules, modelProviders, uploadFiles } from '../db/schema.js';
 import { adminAuth } from '../gateway/auth.js';
 import { DEFAULT_RULE_PACKS, clearRuleCache } from '../gateway/guardrail.js';
 import { clearDefaults, getProviders, reloadProviders, type StoredProvider } from '../llm-store.js';
+import { cosStorageEnabled, uploadObject, getSignedViewUrl, deleteObject } from '../clients/cos.js';
+import { cloudbaseEnabled, uploadToCloudbase } from '../clients/cloudbase.js';
 
 export const adminRoutes = new Hono();
 
@@ -310,4 +313,172 @@ adminRoutes.delete('/models/:id', async (c) => {
   await db.delete(modelProviders).where(eq(modelProviders.id, id));
   await reloadProviders();
   return c.json({ deleted: id, updated: true, note: '模型提供商已删除并实时生效' });
+});
+
+// ---------- 文件上传（网关中转 → 腾讯云 CloudBase）----------
+
+/** 常见文件扩展名白名单（按 MIME 实测结果映射；未知扩展返回原样，仅防路径穿越） */
+const ALLOWED_EXT = /\.(txt|md|pdf|doc|docx|png|jpe?g|gif|webp|xlsx?|csv)$/i;
+
+/** 从 File 对象安全提取文件扩展名（含防路径穿越） */
+function safeExt(fileName: string): string {
+  const base = fileName.split(/[\\/]/).pop() ?? 'file';
+  const m = base.match(/\.([a-zA-Z0-9]+)$/);
+  const ext = m ? m[1].toLowerCase() : 'bin';
+  return ext;
+}
+
+/**
+ * POST /admin/upload — 接收 multipart 表单字段 `file`（可选 `path` 指定目录），
+ * 上传到 CloudBase，返回 fileID 与公网 URL。
+ * 未配置 TCB 时返回 503，提示走文本入库。大小限制 20MB。
+ */
+adminRoutes.post('/upload', async (c) => {
+  if (!cloudbaseEnabled()) {
+    return c.json({ error: 'CloudBase 未启用（已在 .env 配置 TCB_ENABLED/凭证后重试），当前可先用文本方式入库' }, 503);
+  }
+
+  const MAX_BYTES = 20 * 1024 * 1024;
+  let form: FormData;
+  try {
+    form = await c.req.formData();
+  } catch {
+    return c.json({ error: '需以 multipart/form-data 上传，字段名固定为 file' }, 400);
+  }
+
+  const file = form.get('file');
+  if (!(file instanceof File)) {
+    return c.json({ error: '缺少 file 字段，请以 multipart/form-data 上传文件' }, 400);
+  }
+  if (file.size > MAX_BYTES) {
+    return c.json({ error: `文件超过 ${Math.round(MAX_BYTES / 1024 / 1024)}MB 上限` }, 400);
+  }
+  const ext = safeExt(file.name);
+  if (!ALLOWED_EXT.test(file.name)) {
+    return c.json({ error: `文件类型不受支持：.${ext}（仅允许文档与常见图片/表格）` }, 400);
+  }
+
+  const dir = typeof form.get('path') === 'string' && form.get('path')
+    ? String(form.get('path')).replace(/^\/+|\/+$/g, '')
+    : 'kb';
+  const cloudPath = `${dir}/${Date.now()}-${randomUUID().slice(0, 8)}.${ext}`;
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  try {
+    const { fileID, url } = await uploadToCloudbase(cloudPath, buffer);
+    return c.json({ fileID, url, cloudPath, name: file.name, size: file.size, type: file.type || undefined });
+  } catch (err) {
+    console.error('[admin/upload] CloudBase 上传失败:', (err as Error).message);
+    return c.json({ error: `上传失败：${(err as Error).message}` }, 502);
+  }
+});
+
+// ---------- 文件管理（COS 私有桶 + 签名 URL 预览）----------
+
+/**
+ * GET /admin/files — 文件记录列表（最新优先）。
+ * 只返回元数据（不含签名 URL，签名 URL 通过 /files/:id/view 单独获取，避免列表时全部签名）。
+ */
+adminRoutes.get('/files', async (c) => {
+  const rows = await db
+    .select({
+      id: uploadFiles.id,
+      name: uploadFiles.name,
+      objectKey: uploadFiles.objectKey,
+      bucket: uploadFiles.bucket,
+      size: uploadFiles.size,
+      mimeType: uploadFiles.mimeType,
+      createdAt: uploadFiles.createdAt,
+    })
+    .from(uploadFiles)
+    .orderBy(uploadFiles.createdAt);
+  // drizzle orderBy 默认升序，这里取反得到最新在前
+  return c.json({ files: rows.reverse() });
+});
+
+/**
+ * POST /admin/files — 上传文件到 COS 私有桶并写库。
+ * multipart 字段 `file`（必填），可选 `dir` 指定对象目录（默认 files）。
+ * 成功返回记录（含 objectKey/bucket/size 等），另附签名预览 URL（仅这一条即时可用）。
+ */
+adminRoutes.post('/files', async (c) => {
+  if (!cosStorageEnabled()) {
+    return c.json({ error: 'COS 存储未启用（已在 .env 配置 COS_ENABLED/凭证/bucket 后重试）' }, 503);
+  }
+  const MAX_BYTES = 50 * 1024 * 1024; // 50MB
+  let form: FormData;
+  try {
+    form = await c.req.formData();
+  } catch {
+    return c.json({ error: '需以 multipart/form-data 上传，字段名固定为 file' }, 400);
+  }
+
+  const file = form.get('file');
+  if (!(file instanceof File)) {
+    return c.json({ error: '缺少 file 字段，请以 multipart/form-data 上传' }, 400);
+  }
+  if (file.size > MAX_BYTES) {
+    return c.json({ error: `文件超过 ${Math.round(MAX_BYTES / 1024 / 1024)}MB 上限` }, 400);
+  }
+
+  const ext = safeExt(file.name);
+  const dir = typeof form.get('dir') === 'string' && form.get('dir')
+    ? String(form.get('dir')).replace(/^\/+|\/+$/g, '')
+    : 'files';
+  // 目录名加日期便于分月归档；文件名保留原始名（防路径穿越）
+  const baseName = file.name.replace(/[\\/]/g, '_');
+  const objectKey = `${dir}/${new Date().toISOString().slice(0, 7)}/${Date.now()}-${randomUUID().slice(0, 8)}_${baseName}`;
+  const mimeType = file.type || undefined;
+
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const { objectKey: key, bucket } = await uploadObject(objectKey, buffer, mimeType);
+    const inserted = await db
+      .insert(uploadFiles)
+      .values({ name: baseName, objectKey: key, bucket, size: file.size, mimeType })
+      .returning({
+        id: uploadFiles.id,
+        name: uploadFiles.name,
+        objectKey: uploadFiles.objectKey,
+        bucket: uploadFiles.bucket,
+        size: uploadFiles.size,
+        mimeType: uploadFiles.mimeType,
+        createdAt: uploadFiles.createdAt,
+      });
+    return c.json({ file: inserted[0], note: '已上传到 COS 私有桶' });
+  } catch (err) {
+    console.error('[admin/files] COS 上传失败:', (err as Error).message);
+    return c.json({ error: `上传失败：${(err as Error).message}` }, 502);
+  }
+});
+
+/**
+ * GET /admin/files/:id/view — 返回某文件记录的临时签名访问 URL（inline 预览，非下载）。
+ */
+adminRoutes.get('/files/:id/view', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id <= 0) return c.json({ error: 'Invalid file id' }, 400);
+  const rows = await db.select().from(uploadFiles).where(eq(uploadFiles.id, id)).limit(1);
+  if (!rows[0]) return c.json({ error: 'File not found' }, 404);
+  const { url, expiresAt } = await getSignedViewUrl(rows[0].objectKey);
+  return c.json({ fileID: id, name: rows[0].name, url, expiresAt });
+});
+
+/**
+ * DELETE /admin/files/:id — 删除文件记录和 COS 对象。
+ * 需先删对象再删记录（若删对象失败则不删记录，避免残留 URL）。
+ */
+adminRoutes.delete('/files/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id <= 0) return c.json({ error: 'Invalid file id' }, 400);
+  const rows = await db.select().from(uploadFiles).where(eq(uploadFiles.id, id)).limit(1);
+  if (!rows[0]) return c.json({ error: 'File not found' }, 404);
+  try {
+    await deleteObject(rows[0].objectKey);
+  } catch (err) {
+    console.error('[admin/files] COS 删除失败:', (err as Error).message);
+    return c.json({ error: `删除 COS 对象失败：${(err as Error).message}` }, 502);
+  }
+  await db.delete(uploadFiles).where(eq(uploadFiles.id, id));
+  return c.json({ deleted: id });
 });
