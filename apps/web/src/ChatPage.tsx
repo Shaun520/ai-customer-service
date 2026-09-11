@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { chatStream, type ChatMsg } from './api';
 import { Icon } from '@aics/shared/web';
+import { MarkdownContent } from './Markdown';
 
 interface Msg {
   role: 'user' | 'assistant';
@@ -115,8 +116,6 @@ export default function ChatPage() {
     el.style.height = Math.min(el.scrollHeight, 140) + 'px';
   };
 
-  const copyTrace = (id: string) => navigator.clipboard?.writeText(id);
-
   const showTyping = busy && msgs[msgs.length - 1]?.content === '';
 
   return (
@@ -150,9 +149,13 @@ export default function ChatPage() {
               <div key={i} className={`msg ${m.role} ${m.error ? 'error' : ''}`}>
                 <div className="avatar"><Icon name={m.role === 'user' ? 'user' : 'bot'} size={16} /></div>
                 <div className="bubble">
-                  {m.content || (showTyping && i === msgs.length - 1 ? (
-                    <span className="typing"><i /><i /><i /></span>
-                  ) : '')}
+                  {m.role === 'assistant'
+                    ? (m.content
+                        ? <MarkdownContent text={m.content} />
+                        : (showTyping && i === msgs.length - 1
+                            ? <span className="typing"><i /><i /><i /></span>
+                            : ''))
+                    : (m.content || '')}
                   {m.role === 'assistant' && m.meta && m.content && (
                     <div className="bubble-meta">
                       {m.meta.guardrail?.verdict && (
@@ -168,11 +171,6 @@ export default function ChatPage() {
                           {typeof c.score === 'number' ? ' · ' + c.score.toFixed(3) : ''}
                         </span>
                       ))}
-                    </div>
-                  )}
-                  {m.role === 'assistant' && m.meta?.trace_id && m.content && (
-                    <div className="trace-line" title="点击复制 trace_id">
-                      追踪 ID：<span className="mono" onClick={() => copyTrace(m.meta!.trace_id!)}>{m.meta!.trace_id}</span>
                     </div>
                   )}
                 </div>

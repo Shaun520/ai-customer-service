@@ -125,6 +125,52 @@ tbody tr:hover { background: var(--panel-2); }
 .msg.user .bubble { background: var(--brand); color: #fff; border-bottom-right-radius: 4px; }
 .msg.assistant .bubble { background: var(--panel); border: 1px solid var(--border); border-bottom-left-radius: 4px; box-shadow: var(--shadow); }
 .msg.error .bubble { background: var(--danger-soft); border-color: rgba(220, 38, 38, 0.3); }
+
+/* ---- AI 回复 Markdown 渲染（.md 作用域） ---- */
+.md { white-space: normal; word-break: break-word; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p { margin: 0.5em 0; }
+.md h1, .md h2, .md h3, .md h4 { margin: 0.9em 0 0.45em; font-weight: 600; line-height: 1.4; }
+.md h1 { font-size: 1.3em; } .md h2 { font-size: 1.2em; }
+.md h3 { font-size: 1.1em; } .md h4 { font-size: 1.05em; }
+.md strong { font-weight: 700; color: var(--text); }
+.md em { font-style: italic; }
+.md del { text-decoration: line-through; color: var(--muted-2); }
+.md ul, .md ol { margin: 0.5em 0; padding-left: 1.4em; }
+.md ul { list-style: disc; } .md ol { list-style: decimal; }
+.md li { margin: 0.25em 0; }
+.md li > ul, .md li > ol { margin: 0.25em 0; }
+.md input[type='checkbox'] { margin-right: 6px; vertical-align: middle; transform: translateY(-1px); }
+.md blockquote {
+  margin: 0.6em 0; padding: 0.35em 0.9em;
+  border-left: 3px solid var(--brand); background: var(--brand-soft);
+  border-radius: 0 6px 6px 0; color: var(--muted);
+}
+.md blockquote p { margin: 0.25em 0; }
+.md hr { margin: 0.8em 0; border: none; border-top: 1px solid var(--border); }
+.md code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.9em;
+}
+.md code:not(pre code) {
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 4px; padding: 0.1em 0.4em; color: var(--brand-2);
+}
+.md pre {
+  margin: 0.6em 0; padding: 10px 12px; overflow-x: auto;
+  background: #0F172A; border-radius: 8px; line-height: 1.55;
+}
+.md pre code { color: #E2E8F0; background: transparent; border: none; padding: 0; font-size: 0.88em; white-space: pre; }
+.md table {
+  margin: 0.6em 0; border-collapse: collapse; width: 100%;
+  font-size: 0.95em; display: block; overflow-x: auto;
+}
+.md th, .md td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+.md th { background: var(--panel-2); font-weight: 600; color: var(--text); }
+.md tbody tr:nth-child(even) { background: var(--panel-2); }
+.md a { color: var(--brand-2); text-decoration: underline; }
+.md a:hover { color: var(--brand); }
 .bubble-meta { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cite {
   display: inline-flex; align-items: center; gap: 4px; background: var(--brand-soft); border-radius: 6px;
