@@ -176,7 +176,9 @@ export async function retrieve(params: {
       metric: 'COSINE',
       threshold: config.rag.scoreThreshold,
     });
-    chunks = hits
+    // 过滤：只保留达到相似度阈值的命中（阈值 0.5）。
+    // 注意此前用 || c.score > 0 会让低分结果全部穿透，这里改为纯阈值判断。
+    const candidates = hits
       .map((h) => ({
         id: `${h.doc_id}:${h.chunk_index}`,
         text: h.text,
@@ -184,7 +186,17 @@ export async function retrieve(params: {
         documentName: h.doc_name,
         chunkIndex: h.chunk_index,
       }))
-      .filter((c) => c.score >= config.rag.scoreThreshold || c.score > 0);
+      .filter((c) => c.score >= config.rag.scoreThreshold);
+    // 去重：RRF 融合结果中同一 doc+chunk 可能重复出现，只保留得分最高的一条
+    const byScore = new Map<string, RetrievedChunk>();
+    for (const c of candidates) {
+      const cur = byScore.get(c.id);
+      if (!cur || c.score > cur.score) byScore.set(c.id, c);
+    }
+    chunks = [...byScore.values()].sort((a, b) => b.score - a.score);
+    if (candidates.length !== chunks.length) {
+      console.debug(`[rag] dedup chunks: ${candidates.length} -> ${chunks.length}`);
+    }
   } catch (err) {
     success = false;
     errorMessage = (err as Error).message;
@@ -249,6 +261,6 @@ export function buildRagSystemPrompt(params: {
     '-----',
     context,
     '-----',
-    '要求：优先依据上述内容回答；引用时标注【编号】；资料未覆盖的部分要明确说明。',
+    '要求：优先依据上述内容回答，直接给出自然完整的答复，回答中无需标注引用编号；资料未覆盖的部分要明确说明。',
   ].join('\n');
 }
